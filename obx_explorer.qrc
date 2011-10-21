@@ -1,0 +1,18 @@
+<RCC>
+    <qresource prefix="/">
+        <file>images/settings.png</file>
+        <file>images/OpenBOOX-logo.png</file>
+        <file>images/organize.png</file>
+        <file>images/games.png</file>
+        <file>images/add.png</file>
+        <file>images/restore.png</file>
+        <file>images/screen_calibration.png</file>
+        <file>images/applications.png</file>
+        <file>images/power_management.png</file>
+        <file>images/category_organization.png</file>
+        <file>images/file_edit.png</file>
+        <file>images/rename.png</file>
+        <file>images/website_icon.png</file>
+        <file>images/scan.png</file>
+    </qresource>
+</RCC>

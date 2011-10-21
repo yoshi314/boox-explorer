@@ -1,0 +1,6 @@
+debug/
+release/
+Makefile*
+obx_explorer
+obx_explorer.oar
+*~
