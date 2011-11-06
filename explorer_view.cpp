@@ -176,6 +176,22 @@ void ExplorerView::showCategories(const QString &name, QSqlQuery &query, int row
 
     while (query.next())
     {
+        if (handler_type_ == HDLR_BOOKS)
+        {
+            QString subQueryString = query.value(4).toString().section(';', 0, 0);
+            QSqlQuery subQuery;
+            subQuery.prepare(subQueryString);
+            if (subQueryString.contains(":week_ago"))
+            {
+                QDateTime week_ago = QDateTime::currentDateTime().addDays(-7);
+                subQuery.bindValue(":week_ago", week_ago.toString(Qt::ISODate));
+            }
+            subQuery.exec();
+            if (!subQuery.next())
+            {
+                continue;
+            }
+        }
         QStandardItem *item = new QStandardItem();
         item->setText(query.value(0).toString());
         item->setIcon(QIcon(query.value(1).toString()));
@@ -274,7 +290,7 @@ void ExplorerView::showFiles(int category, const QString &path, int row)
 
 void ExplorerView::showBooks(int category, const QString &path, int row)
 {
-    int level = level_ - 1;
+    int level = level_ - int(!homeSkipped_);
 
     category_id_ = category;
 
@@ -561,9 +577,9 @@ void ExplorerView::onItemActivated(const QModelIndex &index)
 
         if (level_ < selected_row_.size() && selected_row_.at(level_) != treeview_.selected())
         {
-            if (level_)
+            if (level_ >= int(!homeSkipped_))
             {
-                int oldLevel = (current_path_.count('/') - root_path_.count('/')) + 1;
+                int oldLevel = (current_path_.count('/') - root_path_.count('/')) + int(!homeSkipped_);
                 for(; oldLevel > level_; oldLevel--)
                 {
                     current_path_.chop(current_path_.size() - current_path_.lastIndexOf('/'));
@@ -614,7 +630,7 @@ void ExplorerView::onItemActivated(const QModelIndex &index)
         }
         case HDLR_BOOKS:
         {
-            if (level_ == 1)
+            if (level_ == int(!homeSkipped_))
             {
                 books_query_list_ = item->data().toStringList()[2].split(';');
                 books_view_icon_ = item->icon();
@@ -683,7 +699,7 @@ void ExplorerView::onCategoryActivated(const QStringList &stringList)
             root_path_ = path;
         }
     }
-    level_ = (current_path_.count('/') - root_path_.count('/')) + 1;
+    level_ = (current_path_.count('/') - root_path_.count('/')) + int(!homeSkipped_);
 
     if (level_ < selected_row_.size())
     {
@@ -1552,7 +1568,7 @@ void ExplorerView::keyReleaseEvent(QKeyEvent *ke)
             break;
         case Qt::Key_Left:
         {
-            if (level_ > 1)
+            if (level_ > int(!homeSkipped_))
             {
                 int row = 0;
                 if (--level_ < selected_row_.size())
@@ -1591,7 +1607,7 @@ void ExplorerView::keyReleaseEvent(QKeyEvent *ke)
             handler_type_ = HDLR_HOME;
             if (homeSkipped_)
             {
-                current_path_.chop(current_path_.size() - current_path_.indexOf('/', 1));
+                current_path_ = root_path_;
             }
             showHome(row);
             break;
