@@ -52,7 +52,8 @@ public:
 
 private Q_SLOTS:
     void onItemActivated(const QModelIndex &);
-    void onPositionChanged(int currentPage, int pages);
+    void onProcessFinished(int, QProcess::ExitStatus);
+    void onPositionChanged(int, int);
     void onAboutToSuspend();
     void onAboutToShutDown();
     void popupMenu();
@@ -71,7 +72,7 @@ private:
     QString getDisplayName(const QFileInfo &fileInfo);
     bool openDocument(QString fullFileName);
     void addApplication(int category, QString fullFileName);
-    int  run(const QString &command, const QStringList & parameters);
+    void run(const QString &command, const QStringList & parameters);
     void keyPressEvent(QKeyEvent *ke);
     void keyReleaseEvent(QKeyEvent *ke);
 
@@ -103,6 +104,7 @@ private:
     QStringList        icon_extensions_;
 
     FileClipboard      fileClipboard_;
+    QProcess           process_;
 };
 
 class ExplorerSplash : public QWidget

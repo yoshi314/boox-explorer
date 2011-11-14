@@ -23,7 +23,6 @@
 #include "book_scanner.h"
 
 #include "onyx/sys/sys.h"
-#include "onyx/sys/sys_utils.h"
 #include "onyx/screen/screen_proxy.h"
 #include "onyx/ui/menu.h"
 #include "onyx/ui/onyx_keyboard_dialog.h"
@@ -90,6 +89,7 @@ ExplorerView::ExplorerView(bool mainUI, QWidget *parent)
     , level_(0)
     , organize_mode_(false)
     , fileClipboard_()
+    , process_(0)
 {
 
     QSize size = qApp->desktop()->screenGeometry().size();
@@ -103,8 +103,10 @@ ExplorerView::ExplorerView(bool mainUI, QWidget *parent)
             this, SLOT(onItemActivated(const QModelIndex &)));
     connect(&treeview_, SIGNAL(positionChanged(int, int)),
             this, SLOT(onPositionChanged(int, int)));
-
-    connect(&status_bar_, SIGNAL(menuClicked()), this, SLOT(popupMenu()));
+    connect(&status_bar_, SIGNAL(menuClicked()),
+            this, SLOT(popupMenu()));
+    connect(&process_, SIGNAL(finished(int, QProcess::ExitStatus)),
+            this, SLOT(onProcessFinished(int, QProcess::ExitStatus)));
 
     if (mainUI)
     {
@@ -823,8 +825,6 @@ bool ExplorerView::openDocument(QString fullFileName)
         qDebug() << "view:" << fullFileName;
         run(viewer, QStringList() << fullFileName);
 
-        book_cover_ = QString();
-
         return true;
     }
 
@@ -851,21 +851,18 @@ void ExplorerView::addApplication(int category, QString fullFileName)
     }
 }
 
-int ExplorerView::run(const QString &command, const QStringList & parameters)
+void ExplorerView::run(const QString &command, const QStringList &parameters)
 {
-    int exitCode;
-
+    process_.setEnvironment(QProcess::systemEnvironment());
+    process_.start(command, parameters);
     sys::SysStatus::instance().setSystemBusy(true);
-    exitCode = sys::runScript(command, parameters);
+}
 
-    if (FileSystemUtils::isScript(command) || exitCode != 0)
-    {
-        sys::SysStatus::instance().setSystemBusy(false);
-    }
-
+void ExplorerView::onProcessFinished(int, QProcess::ExitStatus)
+{
+    book_cover_ = QString();
+    sys::SysStatus::instance().setSystemBusy(false);
     onyx::screen::instance().flush(this, onyx::screen::ScreenProxy::GC);
-
-    return exitCode;
 }
 
 void ExplorerView::onPositionChanged(int currentPage, int pages)
