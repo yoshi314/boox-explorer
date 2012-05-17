@@ -18,8 +18,8 @@
 #ifndef TREE_VIEW_H_
 #define TREE_VIEW_H_
 
-#include "onyx/base/base.h"
 #include <QtGui/QtGui>
+#include <onyx/base/base.h>
 
 namespace obx
 {

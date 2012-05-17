@@ -7,7 +7,9 @@ QT += core \
     sql \
     xml \
     dbus
-HEADERS += book_scanner.h \
+HEADERS += association_dialog.h \
+    mpdclient_dialog.h \
+    book_scanner.h \
     metadata_reader.h \
     file_clipboard.h \
     database_utils.h \
@@ -17,7 +19,9 @@ HEADERS += book_scanner.h \
     boox_action.h \
     obx_explorer.h \
     explorer_view.h
-SOURCES += book_scanner.cpp \
+SOURCES += association_dialog.cpp \
+    mpdclient_dialog.cpp \
+    book_scanner.cpp \
     metadata_reader.cpp \
     file_clipboard.cpp \
     database_utils.cpp \
@@ -37,10 +41,11 @@ static:LIBS += /opt/onyx/arm/lib/static/libonyx_sys.a \
     /opt/onyx/arm/lib/static/libonyx_data.a \
     /opt/onyx/arm/lib/static/libonyx_cms.a \
     /opt/onyx/arm/lib/static/libonyx_screen.a \
-    /opt/onyx/arm/lib/poppler-qt4.a \
-    /opt/onyx/arm/lib/poppler.a \
-    /opt/onyx/arm/lib/fontconfig.a \
-    -lquazip
+    /opt/onyx/arm/lib/libpoppler-qt4.a \
+    /opt/onyx/arm/lib/libpoppler.a \
+    /opt/onyx/arm/lib/libfontconfig.a \
+    -lquazip \
+    -lQtMpdClient
 else:LIBS += -lonyx_sys \
     -lonyx_wireless \
     -lonyx_wpa \
@@ -51,4 +56,5 @@ else:LIBS += -lonyx_sys \
     -lpoppler-qt4 \
     -lpoppler \
     -lfontconfig \
-    -lquazip
+    -lquazip \
+    -lQtMpdClient

@@ -1,4 +1,4 @@
-/*  Copyright (C) 2011  OpenBOOX
+/*  Copyright (C) 2011-2012 OpenBOOX
  *
  *  This program is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU General Public License
@@ -28,10 +28,8 @@ public:
     static bool removeDir(const QString &dirName);
     static bool moveDir(const QString &source, const QString &destination);
     static QString getMatchingIcon(const QFileInfo &fileInfo, const QStringList &iconExtensions);
-    static QString getThumbnail(const QFileInfo &fileInfo, const QStringList &iconExtensions);
+    static QString getThumbnail(const QFileInfo &fileInfo, const QStringList &iconExtensions, bool update = false);
     static bool isSDMounted();
-    static bool isScript(const QFileInfo &fileInfo);
-    static bool isElfBinary(const QFileInfo &fileInfo);
     static bool isRunnable(const QFileInfo &fileInfo);
 };
 

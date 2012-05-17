@@ -14,5 +14,22 @@
         <file>images/rename.png</file>
         <file>images/website_icon.png</file>
         <file>images/scan.png</file>
+        <file>images/album.png</file>
+        <file>images/artist.png</file>
+        <file>images/clear_playlist.png</file>
+        <file>images/music_player_small.png</file>
+        <file>images/normal.png</file>
+        <file>images/pause.png</file>
+        <file>images/play_next.png</file>
+        <file>images/play_prev.png</file>
+        <file>images/play.png</file>
+        <file>images/random.png</file>
+        <file>images/repeat.png</file>
+        <file>images/stop.png</file>
+        <file>images/title.png</file>
+        <file>images/filetype_settings_small.png</file>
+        <file>images/filetype_settings.png</file>
+        <file>images/music_scan.png</file>
+        <file>images/addto_playlist.png</file>
     </qresource>
 </RCC>

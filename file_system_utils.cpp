@@ -1,4 +1,4 @@
-/*  Copyright (C) 2011  OpenBOOX
+/*  Copyright (C) 2011-2012 OpenBOOX
  *
  *  This program is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU General Public License
@@ -19,9 +19,6 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QPixmap>
-#include <QSize>
-#include <QPainter>
-#include <QDebug>
 
 #include "file_system_utils.h"
 
@@ -145,24 +142,29 @@ QString FileSystemUtils::getMatchingIcon(const QFileInfo &fileInfo, const QStrin
     return QString();
 }
 
-QString FileSystemUtils::getThumbnail(const QFileInfo &fileInfo, const QStringList &iconExtensions)
+QString FileSystemUtils::getThumbnail(const QFileInfo &fileInfo, const QStringList &iconExtensions, bool update)
 {
-    QString thumbnailPath = fileInfo.absolutePath() + "/.obx/thumbnails/";
-    QString thumbnailFilePath = thumbnailPath + fileInfo.baseName() + ".png";
+    QString thumbnailFilePath;
 
-    if (!QFile::exists(thumbnailFilePath))
+    if (fileInfo.exists())
     {
-        QDir().mkpath(thumbnailPath);
+        QString thumbnailPath = fileInfo.absolutePath() + "/.obx/thumbnails/";
+        thumbnailFilePath = thumbnailPath + fileInfo.baseName() + ".png";
 
-        QString icon = getMatchingIcon(fileInfo, iconExtensions);
-        QPixmap pixmap(icon);
-
-        if (pixmap.isNull())
+        if (!QFile::exists(thumbnailFilePath) || update)
         {
-            return QString();
-        }
+            QString icon;
+            QPixmap pixmap;
 
-        pixmap.scaled(84, 84, Qt::KeepAspectRatio, Qt::SmoothTransformation).save(thumbnailFilePath, "PNG");
+            if (!QDir().mkpath(thumbnailPath) ||
+                (icon = getMatchingIcon(fileInfo, iconExtensions)).isNull() ||
+                !pixmap.load(icon))
+            {
+                return QString();
+            }
+
+            pixmap.scaled(84, 84, Qt::KeepAspectRatio, Qt::SmoothTransformation).save(thumbnailFilePath, "PNG");
+        }
     }
 
     return thumbnailFilePath;
@@ -176,15 +178,15 @@ bool FileSystemUtils::isSDMounted()
     return content.contains("/media/sd");
 }
 
-bool FileSystemUtils::isScript(const QFileInfo &fileInfo)
+bool FileSystemUtils::isRunnable(const QFileInfo &fileInfo)
 {
     bool result = false;
 
     if (!fileInfo.isDir() && fileInfo.isExecutable())
     {
-        QFile script(fileInfo.filePath());
-        script.open(QIODevice::ReadOnly);
-        QString content(script.readLine());
+        QFile executable(fileInfo.filePath());
+        executable.open(QIODevice::ReadOnly);
+        QString content(executable.readLine(64));
         if (content.startsWith("#!/"))
         {
             content.remove(0, 2);
@@ -193,32 +195,17 @@ bool FileSystemUtils::isScript(const QFileInfo &fileInfo)
                 result = true;
             }
         }
-    }
-
-    return result;
-}
-
-bool FileSystemUtils::isElfBinary(const QFileInfo &fileInfo)
-{
-    bool result = false;
-
-    if (!fileInfo.isDir() && fileInfo.isExecutable())
-    {
-        QFile binary(fileInfo.filePath());
-        binary.open(QIODevice::ReadOnly);
-        QString content(binary.read(4));
-        if (content == QString("%1ELF").arg(QChar(0x7F)))
+        else
         {
-            result = true;
+            content.truncate(4);
+            if (content == QString("%1ELF").arg(QChar(0x7F)))
+            {
+                result = true;
+            }
         }
     }
 
     return result;
-}
-
-bool FileSystemUtils::isRunnable(const QFileInfo &fileInfo)
-{
-    return (isScript(fileInfo) || isElfBinary(fileInfo));
 }
 
 }

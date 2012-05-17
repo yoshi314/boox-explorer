@@ -1,4 +1,4 @@
-/*  Copyright (C) 2011  OpenBOOX
+/*  Copyright (C) 2011-2012 OpenBOOX
  *
  *  This program is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU General Public License
@@ -15,15 +15,15 @@
  *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-#include "book_scanner.h"
-#include "metadata_reader.h"
-#include "file_system_utils.h"
-
 #include <QDir>
 #include <QVariant>
 #include <QSqlQuery>
 #include <QDateTime>
 #include <QDebug>
+
+#include "book_scanner.h"
+#include "metadata_reader.h"
+#include "file_system_utils.h"
 
 namespace obx
 {
@@ -77,34 +77,44 @@ bool BookScanner::scanFile(const QString &fileName)
 
     qDebug() << "scanFile:" << fileName;
 
+    MetadataReader metadata(fileName);
+    metadata.collect();
+
     QSqlQuery query;
     query.prepare("SELECT id FROM books WHERE file = :file");
     query.bindValue(":file", fileName);
     query.exec();
     if (!query.next())
     {
-        MetadataReader metadata(fileName);
-        metadata.collect();
-
+        // Add new entry
         query.prepare("INSERT INTO books (file, title, author, publisher, year, series, "
                                          "series_index, add_date, read_count, cover) "
                       "VALUES (:file, :title, :author, :publisher, :year, :series, "
                               ":series_index, :add_date, :read_count, :cover)");
-        query.bindValue(":file", fileName);
-        query.bindValue(":title", metadata.title());
-        query.bindValue(":author", metadata.author().at(0));
-        query.bindValue(":publisher", metadata.publisher());
-        query.bindValue(":year", metadata.year());
-        query.bindValue(":series", metadata.calibreSeries());
-        query.bindValue(":series_index", metadata.calibreSeriesIndex());
         query.bindValue(":add_date", QDateTime::currentDateTime().toString(Qt::ISODate));
         query.bindValue(":read_count", 0);
-        query.bindValue(":cover", FileSystemUtils::getMatchingIcon(QFileInfo(fileName),
-                                                                   QStringList() << "png" << "jpg"));
-        result = query.exec();
-
-        FileSystemUtils::getThumbnail(QFileInfo(fileName), QStringList() << "png" << "jpg");
     }
+    else
+    {
+        // Update metadata
+        query.prepare("UPDATE books "
+                      "SET title = :title, author = :author, publisher = :publisher, year = :year, "
+                          "series = :series, series_index = :series_index, cover = :cover "
+                      "WHERE file = :file");
+    }
+
+    query.bindValue(":file", fileName);
+    query.bindValue(":title", metadata.title());
+    query.bindValue(":author", metadata.author().at(0));
+    query.bindValue(":publisher", metadata.publisher());
+    query.bindValue(":year", metadata.year());
+    query.bindValue(":series", metadata.calibreSeries());
+    query.bindValue(":series_index", metadata.calibreSeriesIndex());
+    query.bindValue(":cover", FileSystemUtils::getMatchingIcon(QFileInfo(fileName),
+                                                               QStringList() << "png" << "jpg"));
+    result = query.exec();
+
+    FileSystemUtils::getThumbnail(QFileInfo(fileName), QStringList() << "png" << "jpg", true);
 
     return result;
 }

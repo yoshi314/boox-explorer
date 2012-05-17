@@ -1,4 +1,4 @@
-/*  Copyright (C) 2011  OpenBOOX
+/*  Copyright (C) 2011-2012 OpenBOOX
  *
  *  This program is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU General Public License
@@ -15,13 +15,11 @@
  *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-#include <QtGui/QtGui>
+#include <onyx/ui/text_layout.h>
+#include <onyx/sys/sys.h>
+#include <onyx/screen/screen_proxy.h>
 
 #include "tree_view.h"
-
-#include "onyx/ui/text_layout.h"
-#include "onyx/sys/sys.h"
-#include "onyx/screen/screen_proxy.h"
 
 namespace obx
 {
@@ -684,7 +682,7 @@ void ObxTreeView::resizeEvent(QResizeEvent *)
     first_visible_ = selected_ / itemsPerPage() * itemsPerPage();
     updateTreeWidget();
     updateLayout(itemsPerPage());
-//    reportPosition();
+    reportPosition();
 }
 
 // Recursively add the children item of index to internal model.
@@ -849,6 +847,10 @@ bool ObxTreeView::pageUp()
     if (first_visible_ <= 0)
     {
         emit exceed(true);
+        if (selected_ > 0)
+        {
+            navigate(-selected_);
+        }
         return false;
     }
 
@@ -869,6 +871,10 @@ bool ObxTreeView::pageDown()
     if (new_pos >= all_items_.size())
     {
         emit exceed(false);
+        if (selected_ < all_items_.size() - 1)
+        {
+            navigate(all_items_.size() - 1 - selected_);
+        }
         return false;
     }
 

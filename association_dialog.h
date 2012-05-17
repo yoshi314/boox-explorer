@@ -15,43 +15,50 @@
  *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-#ifndef ABOUT_DIALOG_H_
-#define ABOUT_DIALOG_H_
+#ifndef ASSOCIATION_DIALOG_H_
+#define ASSOCIATION_DIALOG_H_
 
-#include <onyx/ui/status_bar.h>
+#include <onyx/ui/onyx_dialog.h>
 
 using namespace ui;
 
 namespace obx
 {
 
-class AboutDialog : public QDialog
+class AssociationDialog : public OnyxDialog
 {
     Q_OBJECT
 
 public:
-    AboutDialog(bool mainUI, QWidget *parent = 0);
-    ~AboutDialog();
+    AssociationDialog(QString extension, QStringList applications, int current, QWidget *parent = 0);
+    virtual ~AssociationDialog();
+
+public:
+    int exec();
+
+private Q_SLOTS:
+    void onAppButtonChanged(bool);
+    void onOkClicked(bool);
+    void onCloseClicked();
 
 private:
     void keyPressEvent(QKeyEvent *ke);
     void keyReleaseEvent(QKeyEvent *ke);
-    unsigned long systemFreeMemory();
+    bool event(QEvent* qe);
 
 private:
+    typedef OnyxCheckBox * CheckBoxPtr;
+    typedef std::vector<CheckBoxPtr> Buttons;
+
     QVBoxLayout    vbox_;
-    QWidget        title_widget_;
-    QHBoxLayout    title_layout_;
-    QLabel         title_icon_;
-    QLabel         title_label_;
-    OnyxPushButton close_button_;
+    QButtonGroup   app_group_;
+    Buttons        apps_;
+    QHBoxLayout    hbox_;
+    OnyxPushButton ok_;
 
-    QLabel         logo_;
-    QLabel         about_;
-
-    StatusBar      status_bar_;
+    int            selected_app_;
 };
 
 }
 
-#endif // ABOUT_DIALOG_H_
+#endif // ASSOCIATION_DIALOG_H_

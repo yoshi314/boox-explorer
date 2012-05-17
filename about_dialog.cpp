@@ -1,4 +1,4 @@
-/*  Copyright (C) 2011  OpenBOOX
+/*  Copyright (C) 2011-2012 OpenBOOX
  *
  *  This program is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU General Public License
@@ -15,12 +15,12 @@
  *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
+#include <onyx/sys/sys.h>
+#include <onyx/sys/sys_utils.h>
+#include <onyx/screen/screen_proxy.h>
+
 #include "about_dialog.h"
 #include "file_system_utils.h"
-
-#include "onyx/sys/sys.h"
-#include "onyx/sys/sys_utils.h"
-#include "onyx/screen/screen_proxy.h"
 
 namespace obx
 {
@@ -110,7 +110,7 @@ AboutDialog::AboutDialog(bool mainUI, QWidget *parent)
     QIcon close_icon = loadIcon(":/images/close.png", icon_size);
     close_button_.setIconSize(icon_size);
     close_button_.setIcon(close_icon);
-    close_button_.setFocusPolicy(Qt::TabFocus);
+    close_button_.setFocusPolicy(Qt::NoFocus);
     title_layout_.addWidget(&close_button_);
 
     // title widget
@@ -137,7 +137,7 @@ AboutDialog::AboutDialog(bool mainUI, QWidget *parent)
 
         aboutString += tr("Free Space\n");
         aboutString += tr("    Memory: %1/%2 MB\n")
-                       .arg(sys::systemFreeMemory() / 1048576)
+                       .arg(systemFreeMemory() / 1048576)
                        .arg(sys::systemTotalMemory() / 1048576);
 
         aboutString += tr("    Internal Flash: %1/%2 MB\n")
@@ -215,6 +215,29 @@ void AboutDialog::keyReleaseEvent(QKeyEvent *ke)
     default:
         break;
     }
+}
+
+unsigned long AboutDialog::systemFreeMemory()
+{
+    unsigned long freeSize = 0;
+
+    QFile meminfo("/proc/meminfo");
+    meminfo.open(QIODevice::ReadOnly);
+
+    QString line;
+    while (!(line = QString(meminfo.readLine())).isEmpty())
+    {
+        line = line.simplified();
+
+        if (line.contains("MemFree:") ||
+            line.contains("Buffers:") ||
+            line.contains("Cached:"))
+        {
+            freeSize += line.split(" ").at(1).toULong();
+        }
+    }
+
+    return freeSize * 1024;
 }
 
 }

@@ -1,4 +1,4 @@
-/*  Copyright (C) 2011  OpenBOOX
+/*  Copyright (C) 2011-2012 OpenBOOX
  *
  *  This program is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU General Public License
@@ -35,9 +35,31 @@ public:
 
 public Q_SLOTS:
     void onScreenSizeChanged();
+    void onMusicPlayerStateChanged(int);
+    void onWpaConnectionChanged(WifiProfile, WpaConnection::ConnectionState);
 
 private:
+    bool         mainUI_;
     ExplorerView view_;
+};
+
+class ObxExplorerAdaptor : public QDBusAbstractAdaptor
+{
+    Q_OBJECT
+    Q_CLASSINFO("D-Bus Interface", "com.onyx.interface.explorer")
+
+public:
+    ObxExplorerAdaptor(ObxExplorer *application)
+        : QDBusAbstractAdaptor(application)
+        , app_(application)
+    {
+        QDBusConnection::systemBus().registerService("com.onyx.service.explorer");
+        QDBusConnection::systemBus().registerObject("/com/onyx/object/explorer", app_);
+    }
+
+private:
+    ObxExplorer *app_;
+    NO_COPY_AND_ASSIGN(ObxExplorerAdaptor);
 };
 
 extern bool initializeDatabase();

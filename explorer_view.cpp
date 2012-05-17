@@ -1,4 +1,4 @@
-/*  Copyright (C) 2011  OpenBOOX
+/*  Copyright (C) 2011-2012 OpenBOOX
  *
  *  This program is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU General Public License
@@ -15,31 +15,27 @@
  *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
+#include <onyx/sys/sys.h>
+#include <onyx/screen/screen_proxy.h>
+#include <onyx/ui/status_bar.h>
+#include <onyx/ui/menu.h>
+#include <onyx/ui/onyx_keyboard_dialog.h>
+#include <onyx/ui/time_zone_dialog.h>
+#include <onyx/ui/legacy_power_management_dialog.h>
+#include <onyx/ui/screen_rotation_dialog.h>
+#include <onyx/wireless/wifi_dialog.h>
+
 #include "explorer_view.h"
 #include "about_dialog.h"
 #include "obx_explorer.h"
 #include "file_system_utils.h"
 #include "database_utils.h"
 #include "book_scanner.h"
-
-#include "onyx/sys/sys.h"
-#include "onyx/screen/screen_proxy.h"
-#include "onyx/ui/menu.h"
-#include "onyx/ui/onyx_keyboard_dialog.h"
-#include "onyx/ui/time_zone_dialog.h"
-#include "onyx/ui/power_management_dialog.h"
-#include "onyx/wireless/wifi_dialog.h"
-
-using namespace ui;
+#include "mpdclient_dialog.h"
+#include "association_dialog.h"
 
 namespace obx
 {
-
-enum
-{
-    CAT_APPS = 4,   // TODO This enum has to become obsolete
-    CAT_GAMES = 5
-};
 
 enum
 {
@@ -57,10 +53,15 @@ enum
     ORG_SCANFLASH,
     ORG_SCANSD,
     ORG_SCANPATH,
+    ORG_SCANMUSICFLASH,
+    ORG_SCANMUSICSD,
     ORG_ADD2APPS,
     ORG_ADD2GAMES,
+    ORG_ADD2PLAYLIST,
     ORG_ADDWEBSITE,
     ORG_ADDWEBSITEICON,
+    ORG_REMOVEBOOK,
+    ORG_REMOVEALLBOOKS,
     ORG_REMOVEAPP,
     ORG_REMOVEWEBSITE
 };
@@ -70,7 +71,6 @@ enum
     SET_TZ = 0,
     SET_PWR_MGMT,
     SET_CALIBRATE,
-    SET_WIFI,
     SET_DEFAULTS,
     SET_ABOUT
 };
@@ -81,7 +81,7 @@ ExplorerView::ExplorerView(bool mainUI, QWidget *parent)
     , vbox_(this)
     , model_(0)
     , treeview_(0, 0)
-    , status_bar_(this, MENU | PROGRESS | BATTERY)
+    , status_bar_(this, MENU | PROGRESS | MUSIC_PLAYER | CONNECTION | CLOCK | BATTERY)
     , mainUI_(mainUI)
     , homeSkipped_(false)
     , handler_type_(HDLR_HOME)
@@ -91,13 +91,10 @@ ExplorerView::ExplorerView(bool mainUI, QWidget *parent)
     , fileClipboard_()
     , process_(0)
 {
+    SysStatus &sys_status = SysStatus::instance();
+    QMpdClient &mpdClient = QMpdClient::instance();
 
-    QSize size = qApp->desktop()->screenGeometry().size();
-
-//    qDebug() << "Rotation: " << SysStatus::instance().screenTransformation();
-//    qDebug() << "Dimensions: " << size.width() << "x" << size.height();
-
-    resize(size);
+    resize(qApp->desktop()->screenGeometry().size());
 
     connect(&treeview_, SIGNAL(activated(const QModelIndex &)),
             this, SLOT(onItemActivated(const QModelIndex &)));
@@ -105,15 +102,38 @@ ExplorerView::ExplorerView(bool mainUI, QWidget *parent)
             this, SLOT(onPositionChanged(int, int)));
     connect(&status_bar_, SIGNAL(menuClicked()),
             this, SLOT(popupMenu()));
+    connect(&status_bar_, SIGNAL(progressClicked(int, int)),
+            this, SLOT(onProgressClicked(int, int)));
     connect(&process_, SIGNAL(finished(int, QProcess::ExitStatus)),
             this, SLOT(onProcessFinished(int, QProcess::ExitStatus)));
+    connect(&mpdClient, SIGNAL(databaseUpdated(bool)),
+            this, SLOT(onDatabaseUpdated(bool)));
+    connect(&mpdClient, SIGNAL(playlistChanged()),
+            this, SLOT(onPlaylistChanged()));
+    connect(&mpdClient, SIGNAL(stateChanged(QMpdStatus::State)),
+            this, SLOT(onStateChanged(QMpdStatus::State)));
+    connect(&mpdClient, SIGNAL(songChanged(const QMpdSong &)),
+            this, SLOT(onSongChanged(const QMpdSong &)));
 
+    connect(&sys_status, SIGNAL(wakeup()), this, SLOT(onWakeup()));
+    connect(&sys_status, SIGNAL(forceQuit()), this, SLOT(onForceQuit()));
     if (mainUI)
     {
-        SysStatus &sys_status = SysStatus::instance();
+        connect(&sys_status, SIGNAL(volumeChanged(int, bool)), this, SLOT(onVolumeChanged(int, bool)));
         connect(&sys_status, SIGNAL(aboutToSuspend()), this, SLOT(onAboutToSuspend()));
         connect(&sys_status, SIGNAL(aboutToShutdown()), this, SLOT(onAboutToShutDown()));
+
+        status_bar_.showItem(CONNECTION, false);
+
+        // Switch off Wifi
+        if (sys_status.sdioState())
+        {
+            sys_status.enableSdio(false);
+        }
     }
+
+    mpdClient.connectToServer(QString(), 0, 1000);
+    onVolumeChanged(sys_status.volume(), false);
 
     QSqlQuery query;
     query.exec(QString("SELECT extension FROM associations WHERE handler_id = %1").arg(HDLR_BOOKS));
@@ -133,11 +153,11 @@ ExplorerView::ExplorerView(bool mainUI, QWidget *parent)
     vbox_.addWidget(&treeview_);
     vbox_.addWidget(&status_bar_);
 
-    showHome(0);
+    show();
+    sys::SysStatus::instance().setSystemBusy(false);
+    onyx::screen::instance().enableUpdate(true);
 
-//    status_bar_.setProgress(treeview_.currentPage(), treeview_.pages());
-    int itemsPerPage = (size.height() == 800 ? 7 : 5);
-    status_bar_.setProgress(1, model_.rowCount() / itemsPerPage + (model_.rowCount() % itemsPerPage ? 1 : 0));
+    showHome(0);
 }
 
 ExplorerView::~ExplorerView()
@@ -178,20 +198,13 @@ void ExplorerView::showCategories(const QString &name, QSqlQuery &query, int row
 
     while (query.next())
     {
-        if (handler_type_ == HDLR_BOOKS)
+        if (handler_type_ == HDLR_BOOKS || handler_type_ == HDLR_MUSIC)
         {
             QString subQueryString = query.value(4).toString().section(';', 0, 0);
-            QSqlQuery subQuery;
-            subQuery.prepare(subQueryString);
-            if (subQueryString.contains(":week_ago"))
-            {
-                QDateTime week_ago = QDateTime::currentDateTime().addDays(-7);
-                subQuery.bindValue(":week_ago", week_ago.toString(Qt::ISODate));
-            }
-            subQuery.exec();
+            QSqlQuery subQuery = runDatabaseQuery(subQueryString);
             if (!subQuery.next())
             {
-                continue;
+                continue;           // Skip empty view
             }
         }
         QStandardItem *item = new QStandardItem();
@@ -205,24 +218,7 @@ void ExplorerView::showCategories(const QString &name, QSqlQuery &query, int row
     }
     model_.setHeaderData(0, Qt::Horizontal, name, Qt::DisplayRole);
 
-    treeview_.clear();
-    if (model_.rowCount())
-    {
-        treeview_.hide();
-    }
-    treeview_.update();
-    treeview_.setModel(&model_);
-    treeview_.show();
-
-    if (row >= model_.rowCount())
-    {
-        row = 0;
-    }
-    QModelIndex index = model_.index(row, 0);
-    if (index.isValid())
-    {
-        treeview_.select(index);
-    }
+    displayView(row);
 }
 
 void ExplorerView::showFiles(int category, const QString &path, int row)
@@ -270,27 +266,10 @@ void ExplorerView::showFiles(int category, const QString &path, int row)
     }
     model_.setHeaderData(0, Qt::Horizontal, dispPath, Qt::DisplayRole);
 
-    treeview_.clear();
-    if (model_.rowCount())
-    {
-        treeview_.hide();
-    }
-    treeview_.update();
-    treeview_.setModel(&model_);
-    treeview_.show();
-
-    if (row >= model_.rowCount())
-    {
-        row = 0;
-    }
-    QModelIndex index = model_.index(row, 0);
-    if (index.isValid())
-    {
-        treeview_.select(index);
-    }
+    displayView(row);
 }
 
-void ExplorerView::showBooks(int category, const QString &path, int row)
+void ExplorerView::showDBViews(int category, const QString &path, int row, const QString &pathPrefix)
 {
     int level = level_ - int(!homeSkipped_);
 
@@ -298,45 +277,17 @@ void ExplorerView::showBooks(int category, const QString &path, int row)
 
     if (level == 0)
     {
-        QSqlQuery query("SELECT name, icon, id, handler_id, handler_data FROM book_views "
-                        "WHERE name <> '' AND visible = 1 ORDER BY position");
+        QSqlQuery query(QString("SELECT name, icon, id, handler_id, handler_data FROM views "
+                                "WHERE name <> '' AND visible = 1 AND handler_id = %1 ORDER BY position")
+                                .arg(handler_type_));
         showCategories(path, query, row);
         return;
     }
 
-    QString queryString = books_query_list_.at(level - 1);
+    QString queryString = query_list_.at(level - 1);
     QString bindString = path.section('/', -1);
-    QSqlQuery query;
-
-    query.prepare(queryString);
-    if (queryString.contains(":title"))
-    {
-        query.bindValue(":title", bindString);
-    }
-    else if (queryString.contains(":author"))
-    {
-        query.bindValue(":author", bindString);
-    }
-    else if (queryString.contains(":publisher"))
-    {
-        query.bindValue(":publisher", bindString);
-    }
-    else if (queryString.contains(":year"))
-    {
-        query.bindValue(":year", bindString);
-    }
-    else if (queryString.contains(":series"))
-    {
-        query.bindValue(":series", bindString);
-    }
-    else if (queryString.contains(":week_ago"))
-    {
-        QDateTime week_ago = QDateTime::currentDateTime().addDays(-7);
-        query.bindValue(":week_ago", week_ago.toString(Qt::ISODate));
-    }
-    query.exec();
-
-    bool leafReached = (level == books_query_list_.size());
+    QSqlQuery query = runDatabaseQuery(queryString, bindString);
+    bool leafReached = (level == query_list_.size());
     int i = 0;
     QFont itemFont;
     itemFont.setPointSize(20);
@@ -350,7 +301,7 @@ void ExplorerView::showBooks(int category, const QString &path, int row)
         {
             QStandardItem *item = new QStandardItem();
             item->setText(query.value(0).toString());
-            item->setIcon(books_view_icon_);
+            item->setIcon(view_icon_);
             item->setEditable(false);
             item->setFont(itemFont);
             item->setTextAlignment(Qt::AlignLeft);
@@ -360,45 +311,26 @@ void ExplorerView::showBooks(int category, const QString &path, int row)
         else
         {
             QString fullFileName = query.value(0).toString();
-            QFileInfo fileInfo(fullFileName);
-            if (fileInfo.exists() && book_extensions_.contains(fileInfo.suffix()))
+            QFileInfo fileInfo(pathPrefix + fullFileName);
+            QStandardItem *item = new QStandardItem();
+            item->setText(query.value(1).toString());
+            item->setIcon(QIcon(getIconByExtension(fileInfo)));
+            item->setData(fullFileName);
+            if (!query.value(2).toString().isEmpty())
             {
-                QStandardItem *item = new QStandardItem();
-                item->setText(query.value(1).toString());
-                item->setIcon(QIcon(getIconByExtension(fileInfo)));
-                item->setData(fullFileName);
-                if (!query.value(2).toString().isEmpty())
-                {
-                    item->setToolTip("By: " + query.value(2).toString());
-                }
-                item->setEditable(false);
-                item->setFont(itemFont);
-                item->setTextAlignment(Qt::AlignLeft);
-                model_.setItem(i, 0, item);
-                i++;
+                item->setToolTip("By: " + query.value(2).toString());
             }
+            item->setSelectable(fileInfo.exists());
+            item->setEditable(false);
+            item->setFont(itemFont);
+            item->setTextAlignment(Qt::AlignLeft);
+            model_.setItem(i, 0, item);
+            i++;
         }
     }
     model_.setHeaderData(0, Qt::Horizontal, path, Qt::DisplayRole);
 
-    treeview_.clear();
-    if (model_.rowCount())
-    {
-        treeview_.hide();
-    }
-    treeview_.update();
-    treeview_.setModel(&model_);
-    treeview_.show();
-
-    if (row >= model_.rowCount())
-    {
-        row = 0;
-    }
-    QModelIndex index = model_.index(row, 0);
-    if (index.isValid())
-    {
-        treeview_.select(index);
-    }
+    displayView(row);
 }
 
 void ExplorerView::showApps(int category, const QString &name, int row)
@@ -446,24 +378,7 @@ void ExplorerView::showApps(int category, const QString &name, int row)
     }
     model_.setHeaderData(0, Qt::Horizontal, name, Qt::DisplayRole);
 
-    treeview_.clear();
-    if (model_.rowCount())
-    {
-        treeview_.hide();
-    }
-    treeview_.update();
-    treeview_.setModel(&model_);
-    treeview_.show();
-
-    if (row >= model_.rowCount())
-    {
-        row = 0;
-    }
-    QModelIndex index = model_.index(row, 0);
-    if (index.isValid())
-    {
-        treeview_.select(index);
-    }
+    displayView(row);
 }
 
 void ExplorerView::showWebsites(int category, const QString &name, int row)
@@ -500,24 +415,7 @@ void ExplorerView::showWebsites(int category, const QString &name, int row)
     }
     model_.setHeaderData(0, Qt::Horizontal, name, Qt::DisplayRole);
 
-    treeview_.clear();
-    if (model_.rowCount())
-    {
-        treeview_.hide();
-    }
-    treeview_.update();
-    treeview_.setModel(&model_);
-    treeview_.show();
-
-    if (row >= model_.rowCount())
-    {
-        row = 0;
-    }
-    QModelIndex index = model_.index(row, 0);
-    if (index.isValid())
-    {
-        treeview_.select(index);
-    }
+    displayView(row);
 }
 
 void ExplorerView::organizeCategories(int row)
@@ -548,6 +446,11 @@ void ExplorerView::organizeCategories(int row)
     }
     model_.setHeaderData(0, Qt::Horizontal, "Organize Home Screen", Qt::DisplayRole);
 
+    displayView(row);
+}
+
+void ExplorerView::displayView(int row)
+{
     treeview_.clear();
     if (model_.rowCount())
     {
@@ -555,10 +458,9 @@ void ExplorerView::organizeCategories(int row)
     }
     treeview_.update();
     treeview_.setModel(&model_);
-    repaint();
     treeview_.show();
 
-    if (row >= model_.rowCount())
+    if (row < 0 || row >= model_.rowCount())
     {
         row = 0;
     }
@@ -569,10 +471,60 @@ void ExplorerView::organizeCategories(int row)
     }
 }
 
+QSqlQuery ExplorerView::runDatabaseQuery(const QString &queryString, const QString &bindString)
+{
+    QSqlQuery query;
+
+    query.prepare(queryString);
+    if (queryString.contains(":week_ago"))
+    {
+        QDateTime week_ago = QDateTime::currentDateTime().addDays(-7);
+        query.bindValue(":week_ago", week_ago.toString(Qt::ISODate));
+    }
+    else if (!bindString.isEmpty())
+    {
+        if (queryString.contains(":title"))
+        {
+            query.bindValue(":title", bindString);
+        }
+        else if (queryString.contains(":author"))
+        {
+            query.bindValue(":author", bindString);
+        }
+        else if (queryString.contains(":publisher"))
+        {
+            query.bindValue(":publisher", bindString);
+        }
+        else if (queryString.contains(":year"))
+        {
+            query.bindValue(":year", bindString);
+        }
+        else if (queryString.contains(":series"))
+        {
+            query.bindValue(":series", bindString);
+        }
+        else if (queryString.contains(":artist"))
+        {
+            query.bindValue(":artist", bindString);
+        }
+        else if (queryString.contains(":album"))
+        {
+            query.bindValue(":album", bindString);
+        }
+        else if (queryString.contains(":genre"))
+        {
+            query.bindValue(":genre", bindString);
+        }
+    }
+    query.exec();
+
+    return query;
+}
+
 void ExplorerView::onItemActivated(const QModelIndex &index)
 {
     QStandardItem *item = model_.itemFromIndex(index);
-    if (!organize_mode_ && item != 0)
+    if (!organize_mode_ && item != 0 && item->isSelectable())
     {
         QString fullFileName;
         int row = 0;
@@ -634,18 +586,18 @@ void ExplorerView::onItemActivated(const QModelIndex &index)
         {
             if (level_ == int(!homeSkipped_))
             {
-                books_query_list_ = item->data().toStringList()[2].split(';');
-                books_view_icon_ = item->icon();
+                query_list_ = item->data().toStringList()[2].split(';');
+                view_icon_ = item->icon();
             }
 
-            if (!QFile::exists(item->data().toString()))    // TODO get proper leaf check
+            if (level_ <= query_list_.size() - homeSkipped_)
             {
                 current_path_ = fullFileName;
                 if (++level_ < selected_row_.size())
                 {
                     row = selected_row_.at(level_);
                 }
-                showBooks(category_id_, fullFileName, row);
+                showDBViews(category_id_, fullFileName, row);
             }
             else
             {
@@ -671,6 +623,30 @@ void ExplorerView::onItemActivated(const QModelIndex &index)
             {
                 qDebug() << "website:" << url.at(0);
                 run("/opt/onyx/arm/bin/web_browser", url);
+            }
+            break;
+        }
+        case HDLR_MUSIC:
+        {
+            if (level_ == int(!homeSkipped_))
+            {
+                query_list_ = item->data().toStringList()[2].split(';');
+                view_icon_ = item->icon();
+            }
+
+            if (level_ <= query_list_.size() - homeSkipped_)
+            {
+                current_path_ = fullFileName;
+                if (++level_ < selected_row_.size())
+                {
+                    row = selected_row_.at(level_);
+                }
+                showDBViews(category_id_, fullFileName, row, QString(qgetenv("HOME")) + "/.mpd/music/");
+            }
+            else
+            {
+                QMpdClient::instance().addToPlaylist(item->data().toString(),
+                                                     QMpdClient::instance().status().songPos() + 1);
             }
             break;
         }
@@ -714,7 +690,7 @@ void ExplorerView::onCategoryActivated(const QStringList &stringList)
         showFiles(categoryId, current_path_, row);
         break;
     case HDLR_BOOKS:
-        showBooks(categoryId, current_path_, row);
+        showDBViews(categoryId, current_path_, row);
         break;
     case HDLR_APPS:
         showApps(categoryId, current_path_, row);
@@ -722,17 +698,72 @@ void ExplorerView::onCategoryActivated(const QStringList &stringList)
     case HDLR_WEBSITES:
         showWebsites(categoryId, current_path_, row);
         break;
+    case HDLR_MUSIC:
+        showDBViews(categoryId, current_path_, row, QString(qgetenv("HOME")) + "/.mpd/music/");
+        break;
     default:
         break;
+    }
+}
+
+void ExplorerView::addToPlaylist(QStandardItem *item)
+{
+    int  level = level_ - int(!homeSkipped_);
+
+    if (level > 0 && level == query_list_.size())
+    {
+        QString fileName = item->data().toString();
+        QMpdClient::instance().addToPlaylist(fileName);
+    }
+    else
+    {
+        QString queryString, bindString;
+
+        if (level == 0)
+        {
+            QStringList booksQueryList = item->data().toStringList()[2].split(';');
+            if (booksQueryList.size() != 1)
+            {
+                return;
+            }
+            queryString = booksQueryList.at(0);
+        }
+        else
+        {
+            queryString = query_list_.at(level);
+            bindString = item->text();
+        }
+
+        QSqlQuery query = runDatabaseQuery(queryString, bindString);
+
+        while (query.next())
+        {
+            toBeAdded_ << query.value(0).toString();
+        }
+
+        while (!toBeAdded_.isEmpty() &&
+               QMpdClient::instance().addToPlaylist(toBeAdded_.takeFirst()) == -1);
     }
 }
 
 QString ExplorerView::getByExtension(const QString &field, const QString &extension)
 {
     QString result;
-    QSqlQuery query(QString("SELECT %1 FROM associations WHERE extension = '%2'")
-                            .arg(field)
-                            .arg(extension));
+    QSqlQuery query;
+    if (field == "viewer")
+    {
+        query.exec(QString("SELECT app.executable FROM applications app "
+                           "INNER JOIN associations file ON app.id = file.viewer "
+                           "WHERE file.extension = '%1'")
+                          .arg(extension));
+    }
+    else
+    {
+        query.exec(QString("SELECT %1 FROM associations WHERE extension = '%2'")
+                          .arg(field)
+                          .arg(extension));
+    }
+
     if (query.first())
     {
         result = query.value(0).toString();
@@ -802,7 +833,7 @@ QString ExplorerView::getDisplayName(const QFileInfo &fileInfo)
     return displayName;
 }
 
-bool ExplorerView::openDocument(QString fullFileName)
+bool ExplorerView::openDocument(const QString &fullFileName)
 {
     QString viewer = getByExtension("viewer", QFileInfo(fullFileName).suffix());
     if (!viewer.isNull())
@@ -831,19 +862,25 @@ bool ExplorerView::openDocument(QString fullFileName)
     return false;
 }
 
-void ExplorerView::addApplication(int category, QString fullFileName)
+void ExplorerView::addApplication(const QString &categoryName, const QString &fullFileName)
 {
     // Add to database
     QFileInfo fileInfo(fullFileName);
     QString displayName = getDisplayName(fileInfo);
     QString iconFileName = FileSystemUtils::getThumbnail(fileInfo, icon_extensions_);
 
-    QSqlQuery query(QString("INSERT INTO applications (name, executable, icon, category_id) "
-                            "VALUES ('%1', '%2', '%3', %4)")
-                            .arg(displayName)
-                            .arg(fullFileName)
-                            .arg(iconFileName)
-                            .arg(category));
+    QSqlQuery query;
+    query.exec(QString("SELECT id FROM categories WHERE name = '%1'").arg(categoryName));
+    if (query.next())
+    {
+        int category = query.value(0).toInt();
+        query.exec(QString("INSERT INTO applications (name, executable, icon, category_id) "
+                           "VALUES ('%1', '%2', '%3', %4)")
+                           .arg(displayName)
+                           .arg(fullFileName)
+                           .arg(iconFileName)
+                           .arg(category));
+    }
 
     if (query.numRowsAffected() > 0)
     {
@@ -861,6 +898,7 @@ void ExplorerView::run(const QString &command, const QStringList &parameters)
 void ExplorerView::onProcessFinished(int, QProcess::ExitStatus)
 {
     book_cover_ = QString();
+    status_bar_.repaint();
     sys::SysStatus::instance().setSystemBusy(false);
     onyx::screen::instance().flush(this, onyx::screen::ScreenProxy::GC);
 }
@@ -869,6 +907,181 @@ void ExplorerView::onPositionChanged(int currentPage, int pages)
 {
     status_bar_.setProgress(currentPage, pages);
     onyx::screen::instance().flush(this, waveform_);
+}
+
+void ExplorerView::onDatabaseUpdated(bool)
+{
+    qDebug() << "updating local music database...";
+    QMpdSongList songList = QMpdClient::instance().getSongList();
+
+    QSqlQuery query;
+    query.exec("DELETE FROM music");
+
+    for (int i = 0; i < songList.size(); i++)
+    {
+        QMpdSong song = songList.at(i);
+
+        query.prepare("SELECT id FROM music WHERE file = :file");
+        query.bindValue(":file", song.uri());
+        query.exec();
+        if (!query.next())
+        {
+            query.prepare("INSERT INTO music (file, title, artist, album, track, "
+                                             "genre, year, add_date, play_count) "
+                          "VALUES (:file, :title, :artist, :album, :track, "
+                                  ":genre, :year, :add_date, :play_count)");
+            query.bindValue(":file", song.uri());
+            query.bindValue(":title", song.title());
+            query.bindValue(":artist", song.artist());
+            query.bindValue(":album", song.album());
+            query.bindValue(":track", song.track());
+            query.bindValue(":genre", song.genre());
+            query.bindValue(":year", song.year());
+            query.bindValue(":add_date", QDateTime::currentDateTime().toString(Qt::ISODate));
+            query.bindValue(":play_count", 0);
+            query.exec();
+        }
+    }
+
+    sys::SysStatus::instance().setSystemBusy(false);
+
+    if (handler_type_ == HDLR_MUSIC)
+    {
+        if (level_ > int(!homeSkipped_))
+        {
+            level_ = int(!homeSkipped_);
+            current_path_.chop(current_path_.size() - current_path_.indexOf('/', 1));
+        }
+        selected_row_.resize(level_);
+        showDBViews(category_id_, current_path_, 0, QString(qgetenv("HOME")) + "/.mpd/music/");
+    }
+    else
+    {
+        onyx::screen::instance().flush(this, onyx::screen::ScreenProxy::GC);
+    }
+}
+
+void ExplorerView::onPlaylistChanged()
+{
+    while (!toBeAdded_.isEmpty())
+    {
+        if (QMpdClient::instance().addToPlaylist(toBeAdded_.takeFirst()) >= 0)
+        {
+            return;
+        }
+    }
+
+    if (toBeAdded_.isEmpty())
+    {
+        static bool playListFilled = false;
+        QMpdSongList playlist = QMpdClient::instance().syncPlaylist();
+        int size = playlist.size();
+        int position = QMpdClient::instance().latestSongPosition();
+
+        if (bool(size) ^ playListFilled)
+        {
+            playListFilled = bool(size);
+            if (!playListFilled)
+            {
+                sys::SysStatus::instance().reportMusicPlayerState(STOP_PLAYER);
+            }
+        }
+
+        qDebug() << QString("current playlist (%1 entries):").arg(size);
+        if (size)
+        {
+            for (int i = 0; i < size; i++)
+            {
+                QMpdSong song = playlist.at(i);
+                QString  name = song.artist() + " - " + song.title();
+                qDebug() << name;
+            }
+
+            if (position >= 0)
+            {
+                QMpdClient::instance().playPosition(position);
+            }
+            else
+            {
+                QMpdClient::instance().play();
+            }
+        }
+    }
+}
+
+void ExplorerView::onStateChanged(QMpdStatus::State state)
+{
+    const QStringList stateName = QStringList() << "Unknown" << "Stop" << "Play" << "Pause";
+    qDebug() << "state:" << stateName[state];
+
+    switch (state)
+    {
+    case QMpdStatus::StatePlay:
+        sys::SysStatus::instance().enableIdle(false);
+        sys::SysStatus::instance().reportMusicPlayerState(MUSIC_PLAYING);
+        break;
+    case QMpdStatus::StatePause:
+        sys::SysStatus::instance().reportMusicPlayerState(MUSIC_PAUSED);
+        break;
+    case QMpdStatus::StateStop:
+    default:
+        sys::SysStatus::instance().enableIdle(true);
+
+        if (QMpdClient::instance().playlist().size() > 0)   // No connection required
+        {
+            sys::SysStatus::instance().reportMusicPlayerState(MUSIC_STOPPED);
+        }
+        break;
+    }
+}
+
+void ExplorerView::onSongChanged(const QMpdSong &song)
+{
+    qDebug() << "song:" << song.uri();
+
+    QSqlQuery query;
+
+    query.prepare("SELECT play_count, id FROM music WHERE file = :file");
+    query.bindValue(":file", song.uri());
+    query.exec();
+
+    if (query.next())
+    {
+        query.exec(QString("UPDATE music SET play_date = '%1', play_count = %2 WHERE id = %3")
+                          .arg(QDateTime::currentDateTime().toString(Qt::ISODate))
+                          .arg(query.value(0).toInt() + 1)
+                          .arg(query.value(1).toInt()));
+    }
+}
+
+void ExplorerView::onWakeup()
+{
+    QMpdStatus::State state = QMpdClient::instance().status().state();
+
+    if (state == QMpdStatus::StatePlay || state == QMpdStatus::StatePause)
+    {
+        sys::SysStatus::instance().enableIdle(false);
+    }
+
+    if (sys::SysStatus::instance().isWpaSupplicantRunning())
+    {
+        sys::SysStatus::instance().stopWpaSupplicant();
+    }
+}
+
+void ExplorerView::onForceQuit()
+{
+    if (process_.state() == QProcess::Running)
+    {
+        qDebug() << "killing process:" << process_.pid();
+        process_.kill();
+    }
+}
+
+void ExplorerView::onVolumeChanged(int newVolume, bool isMute)
+{
+    qDebug() << "onVolumeChanged:" << newVolume << isMute;
+    QMpdClient::instance().setVolume(newVolume);
 }
 
 void ExplorerView::onAboutToSuspend()
@@ -928,7 +1141,7 @@ void ExplorerView::onAboutToSuspend()
         QFile::copy(selectedImage, screenSaverImage);
     }
 
-    // Standby splash is provided by the system manager
+    // Standby splash is displayed by the system manager
     sys::SysStatus::instance().suspend();
 }
 
@@ -936,8 +1149,11 @@ void ExplorerView::onAboutToShutDown()
 {
     qDebug("System is about to shutdown");
 
+    // Save date/time
+    system("hwclock -w -u");
+
     // Save seed
-    QFile seedFile("/root/seed");
+    QFile seedFile(QString(qgetenv("HOME")) + "/seed");
     if (seedFile.open(QIODevice::WriteOnly))
     {
         seedFile.write(QString("%1").arg(qrand()).toLocal8Bit());
@@ -965,8 +1181,10 @@ void ExplorerView::popupMenu()
     QModelIndex index = model_.index(treeview_.selected(), 0);
     QStandardItem *item = 0;
     QString fullFileName;
+    QStringList extensions;
     QString editor;
     QStringList doc;
+    bool refresh = false;
 
     if (index.isValid())
     {
@@ -988,6 +1206,15 @@ void ExplorerView::popupMenu()
     // system actions
     std::vector<int> sys_actions;
     sys_actions.push_back(ROTATE_SCREEN);
+    sys_actions.push_back(MUSIC);
+    if (sys::SysStatus::instance().isWpaSupplicantRunning())
+    {
+        sys_actions.push_back(WIFI_OFF);
+    }
+    else
+    {
+        sys_actions.push_back(WIFI);
+    }
     if (mainUI_)
     {
         if (FileSystemUtils::isSDMounted())
@@ -1004,6 +1231,7 @@ void ExplorerView::popupMenu()
     systemActions_.generateActions(sys_actions);
     menu.setSystemAction(&systemActions_);
 
+    // organize and file actions
     fileActions_.clear();
     organizeActions_.initializeActions(QIcon(":/images/organize.png"), "Organize");
     organizeActions_.addAction(QIcon(":/images/category_organization.png"), tr("Home Screen"), ORG_CATEGORIES);
@@ -1020,7 +1248,7 @@ void ExplorerView::popupMenu()
             QBitArray properties = item->data().toBitArray();
             if (properties[0] == true || book_extensions_.contains(extension))
             {
-                organizeActions_.addAction(QIcon(":/images/scan.png"), tr("Scan From Here"), ORG_SCANPATH);
+                organizeActions_.addAction(QIcon(":/images/scan.png"), tr("Scan Books From Here"), ORG_SCANPATH);
             }
             else if (properties[1] == true)
             {
@@ -1047,13 +1275,20 @@ void ExplorerView::popupMenu()
                 fileActions_.addAction(QIcon(":/images/paste.png"), tr("Paste"), FILE_PASTE);
             }
         }
+        else if (!fileClipboard_.isEmpty())
+        {
+            fileActions_.initializeActions(QIcon(":/images/edit.png"), tr("File"));
+            fileActions_.addAction(QIcon(":/images/paste.png"), tr("Paste"), FILE_PASTE);
+        }
         break;
     case HDLR_BOOKS:
-        organizeActions_.addAction(QIcon(":/images/scan.png"), tr("Scan Int. Flash"), ORG_SCANFLASH);
-        organizeActions_.addAction(QIcon(":/images/scan.png"), tr("Scan SD Card"), ORG_SCANSD);
-
+        organizeActions_.addAction(QIcon(":/images/scan.png"), tr("Scan Books Int. Flash"), ORG_SCANFLASH);
+        organizeActions_.addAction(QIcon(":/images/scan.png"), tr("Scan Books SD Card"), ORG_SCANSD);
+        organizeActions_.addSeparator();
         if (item != 0)
         {
+            organizeActions_.addAction(QIcon(":/images/delete.png"), tr("Remove Book"), ORG_REMOVEBOOK);
+
             doc << item->data().toString();
             editor = getByExtension("editor", QFileInfo(doc[0]).suffix());
 
@@ -1063,6 +1298,7 @@ void ExplorerView::popupMenu()
                 fileActions_.addAction(QIcon(":/images/file_edit.png"), tr("Edit"), FILE_EDIT);
             }
         }
+        organizeActions_.addAction(QIcon(":/images/delete.png"), tr("Remove all Books"), ORG_REMOVEALLBOOKS);
         break;
     case HDLR_APPS:
         if (item != 0)
@@ -1077,6 +1313,23 @@ void ExplorerView::popupMenu()
             organizeActions_.addAction(QIcon(":/images/delete.png"), tr("Remove Website"), ORG_REMOVEWEBSITE);
         }
         break;
+    case HDLR_MUSIC:
+        organizeActions_.addAction(QIcon(":/images/music_scan.png"), tr("Scan Music Int. Flash"), ORG_SCANMUSICFLASH);
+        organizeActions_.addAction(QIcon(":/images/music_scan.png"), tr("Scan Music SD Card"), ORG_SCANMUSICSD);
+        if (item != 0)
+        {
+            if (level_ == int(!homeSkipped_))
+            {
+                QStringList booksQueryList = item->data().toStringList()[2].split(';');
+                if (booksQueryList.size() != 1)
+                {
+                    break;
+                }
+            }
+            organizeActions_.addSeparator();
+            organizeActions_.addAction(QIcon(":/images/addto_playlist.png"), tr("Add to Playlist"), ORG_ADD2PLAYLIST);
+        }
+        break;
     default:
         break;
     }
@@ -1087,6 +1340,19 @@ void ExplorerView::popupMenu()
         menu.addGroup(&fileActions_);
     }
 
+    // associate actions
+    associateActions_.initializeActions(QIcon(":/images/filetype_settings.png"), tr("Select Reader"));
+    QSqlQuery query(QString("SELECT extension FROM associations WHERE viewers <> '' ORDER BY extension"));
+    while (query.next())
+    {
+        QString extension = query.value(0).toString();
+        associateActions_.addAction(QIcon("/usr/share/explorer/images/extensions/" + extension + ".png"),
+                                    extension, extensions.size());
+        extensions.append(extension);
+    }
+    query.finish();
+    menu.addGroup(&associateActions_);
+
     // settings actions
     settingsActions_.initializeActions(QIcon(":/images/settings.png"), tr("Settings"));
     if (mainUI_)
@@ -1094,372 +1360,512 @@ void ExplorerView::popupMenu()
         settingsActions_.addAction(QIcon(":/images/time_zone.png"), tr("Time Zone"), SET_TZ);
         settingsActions_.addAction(QIcon(":/images/power_management.png"), tr("Power Management"), SET_PWR_MGMT);
         settingsActions_.addAction(QIcon(":/images/screen_calibration.png"), tr("Screen Calibration"), SET_CALIBRATE);
-        settingsActions_.addAction(QIcon(":/images/wifi.png"), tr("Wireless LAN"), SET_WIFI);
     }
     settingsActions_.addAction(QIcon(":/images/restore.png"), tr("Default Categories"), SET_DEFAULTS);
     settingsActions_.addAction(QIcon(":/images/about.png"), tr("About"), SET_ABOUT);
     menu.addGroup(&settingsActions_);
 
-    if (menu.popup() != QDialog::Accepted)
+    if (menu.popup() == QDialog::Accepted)
     {
+        onyx::screen::instance().enableUpdate(false);
         QApplication::processEvents();
-        return;
-    }
+        onyx::screen::instance().enableUpdate(true);
+        onyx::screen::instance().flush(this, onyx::screen::ScreenProxy::GU, false);
 
-    onyx::screen::instance().enableUpdate(false);
-    QApplication::processEvents();
-    onyx::screen::instance().enableUpdate(true);
-
-    QAction *group = menu.selectedCategory();
-    if (group == systemActions_.category())
-    {
-        switch (systemActions_.selected())
+        QAction *group = menu.selectedCategory();
+        if (group == systemActions_.category())
         {
-        case RETURN_TO_LIBRARY:
-            qApp->exit();
-            return;
-        case ROTATE_SCREEN:
-            SysStatus::instance().rotateScreen();
-            return;
-        case REMOVE_SD:
-            if (SysStatus::instance().umountSD() == false)
+            switch (systemActions_.selected())
             {
-                qDebug("SD removal failed.");
+            case RETURN_TO_LIBRARY:
+                qApp->exit();
+                return;
+            case ROTATE_SCREEN:
+            {
+                ScreenRotationDialog dialog;
+                dialog.popup();
+                return;
             }
-            break;
-        case STANDBY:
-            onAboutToSuspend();
-            return;
-        case SHUTDOWN:
-            onAboutToShutDown();
-            return;
-        default:
-            return;
-        }
-    }
-    else if (group == fileActions_.category())
-    {
-        switch (fileActions_.selected())
-        {
-        case FILE_EDIT:
-            qDebug() << "edit:" << doc[0];
-            run(editor, doc);
-            return;
-        case FILE_RENAME:
-        {
-            treeview_.setHovering(false);
-            onyx::screen::instance().flush(this, onyx::screen::ScreenProxy::GU);
-
-            OnyxKeyboardDialog dialog(this, tr("Enter new file name"));
-            QString newFileName = dialog.popup(item->text());
-            treeview_.setHovering(true);
-
-            if (!newFileName.isEmpty())
-            {
-                newFileName.prepend(current_path_ + "/");
-                if (QFile::rename(fullFileName, newFileName))
+            case MUSIC:
+                if (mainUI_)
                 {
-                    qDebug() << "renamed:" << fullFileName << "to" << newFileName;
+                    SysStatus::instance().requestMusicPlayer(START_PLAYER);
+                    return;
+                }
+                else
+                {
+                    MpdClientDialog mpdClientDialog(this);
+                    mpdClientDialog.exec();
+                    break;
+                }
+            case WIFI:
+            {
+                WifiDialog dialog(this, SysStatus::instance());
+                dialog.popup();
+                break;
+            }
+            case WIFI_OFF:
+                sys::SysStatus::instance().stopWpaSupplicant();
+                break;
+            case REMOVE_SD:
+                if (SysStatus::instance().umountSD() == false)
+                {
+                    qDebug("SD removal failed.");
+                }
+                break;
+            case STANDBY:
+                onAboutToSuspend();
+                return;
+            case SHUTDOWN:
+                onAboutToShutDown();
+                return;
+            default:
+                break;
+            }
+        }
+        else if (group == fileActions_.category())
+        {
+            switch (fileActions_.selected())
+            {
+            case FILE_EDIT:
+                qDebug() << "edit:" << doc[0];
+                run(editor, doc);
+                return;
+            case FILE_RENAME:
+            {
+                treeview_.setHovering(false);
+                onyx::screen::instance().flush(this, onyx::screen::ScreenProxy::GU);
+
+                OnyxKeyboardDialog dialog(this, tr("Enter new file name"));
+                QString newFileName = dialog.popup(item->text());
+                treeview_.setHovering(true);
+
+                if (!newFileName.isEmpty())
+                {
+                    newFileName.prepend(current_path_ + "/");
+                    if (QFile::rename(fullFileName, newFileName))
+                    {
+                        qDebug() << "renamed:" << fullFileName << "to" << newFileName;
+                        showFiles(category_id_, current_path_, treeview_.selected());
+                        return;
+                    }
+                    else
+                    {
+                        QString message;
+                        if (QFile::exists(newFileName))
+                        {
+                            if (QFileInfo(newFileName).isDir())
+                            {
+                                message = tr("Directory name already exists");
+                            }
+                            else
+                            {
+                                message = tr("File name already exists");
+                            }
+                        }
+                        else
+                        {
+                            message = tr("Rename failed");
+                        }
+
+                        MessageDialog error(QMessageBox::Icon(QMessageBox::Warning) , tr("Rename failed"),
+                                            message, QMessageBox::Ok);
+                        error.exec();
+                    }
+                }
+                break;
+            }
+            case FILE_DELETE:
+            {
+                // Confirmation dialog
+                MessageDialog del(QMessageBox::Icon(QMessageBox::Warning) , tr("Delete"),
+                                  tr("Do you want to delete %1?").arg(item->text()),
+                                  QMessageBox::Yes | QMessageBox::No);
+
+                if (del.exec() == QMessageBox::Yes)
+                {
+                    bool removed = false;
+                    QFileInfo fileInfo(fullFileName);
+                    if (fileInfo.isDir())
+                    {
+                        removed = FileSystemUtils::removeDir(fullFileName);
+                    }
+                    else if (fileInfo.isFile())
+                    {
+                        removed = QFile::remove(fullFileName);
+                    }
+
+                    if (removed == true)
+                    {
+                        qDebug() << "deleted:" << fullFileName;
+                        showFiles(category_id_, current_path_, 0);
+                        return;
+                    }
+                    else
+                    {
+                        qDebug() << "deleting failed!";
+                    }
+                }
+                break;
+            }
+            case FILE_CUT:
+                fileClipboard_.cut(fullFileName);
+                item->setSelectable(false);
+                treeview_.repaint();
+                repaint();
+                break;
+            case FILE_COPY:
+                fileClipboard_.copy(fullFileName);
+                item->setSelectable(true);
+                treeview_.repaint();
+                repaint();
+                break;
+            case FILE_PASTE:
+                if (fileClipboard_.paste(current_path_))
+                {
+                    qDebug() << "pasted:" << (current_path_ + "/" + fileClipboard_.fileName());
                     showFiles(category_id_, current_path_, treeview_.selected());
                     return;
                 }
                 else
                 {
                     QString message;
-                    if (QFile::exists(newFileName))
+                    if (QFile::exists(current_path_ + "/" + fileClipboard_.fileName()))
                     {
-                        if (QFileInfo(newFileName).isDir())
+                        if (fileClipboard_.holdsDir())
                         {
-                            message = tr("Directory name already exists");
+                            message = tr("Directory already exists");
                         }
                         else
                         {
-                            message = tr("File name already exists");
+                            message = tr("File already exists");
                         }
                     }
                     else
                     {
-                        message = tr("Rename failed");
+                        message = tr("Paste failed");
                     }
 
-                    MessageDialog error(QMessageBox::Icon(QMessageBox::Warning) , tr("Rename failed"),
+                    MessageDialog error(QMessageBox::Icon(QMessageBox::Warning) , tr("Paste failed"),
                                         message, QMessageBox::Ok);
                     error.exec();
                 }
+                break;
+            default:
+                break;
             }
-            break;
         }
-        case FILE_DELETE:
+        else if (group == organizeActions_.category())
         {
-            // Confirmation dialog
-            MessageDialog del(QMessageBox::Icon(QMessageBox::Warning) , tr("Delete"),
-                              tr("Do you want to delete %1?").arg(item->text()),
-                              QMessageBox::Yes | QMessageBox::No);
+            BookScanner scanner(book_extensions_);
+            QString dir = "sd";
 
-            if (del.exec() == QMessageBox::Yes)
+            switch (organizeActions_.selected())
             {
-                bool removed = false;
-                QFileInfo fileInfo(fullFileName);
-                if (fileInfo.isDir())
-                {
-                    removed = FileSystemUtils::removeDir(fullFileName);
-                }
-                else if (fileInfo.isFile())
-                {
-                    removed = QFile::remove(fullFileName);
-                }
-
-                if (removed == true)
-                {
-                    qDebug() << "deleted:" << fullFileName;
-                    showFiles(category_id_, current_path_, 0);
-                    return;
-                }
-                else
-                {
-                    qDebug() << "deleting failed!";
-                }
-            }
-            break;
-        }
-        case FILE_CUT:
-            fileClipboard_.cut(fullFileName);
-            item->setSelectable(false);
-            treeview_.repaint();
-            repaint();
-            break;
-        case FILE_COPY:
-            fileClipboard_.copy(fullFileName);
-            item->setSelectable(true);
-            treeview_.repaint();
-            repaint();
-            break;
-        case FILE_PASTE:
-            if (fileClipboard_.paste(current_path_))
-            {
-                qDebug() << "pasted:" << (current_path_ + "/" + fileClipboard_.fileName());
-                showFiles(category_id_, current_path_, treeview_.selected());
+            case ORG_CATEGORIES:
+                organizeCategories(0);
                 return;
-            }
-            else
-            {
-                QString message;
-                if (QFile::exists(current_path_ + "/" + fileClipboard_.fileName()))
+            case ORG_SCANFLASH:
+                dir = "flash";
+                // fall through
+            case ORG_SCANSD:
+                sys::SysStatus::instance().setSystemBusy(true);
+                scanner.scan("/media/" + dir);
+                sys::SysStatus::instance().setSystemBusy(false);
+                if (handler_type_ == HDLR_BOOKS)
                 {
-                    if (fileClipboard_.holdsDir())
+                    if (level_ > int(!homeSkipped_))
                     {
-                        message = tr("Directory already exists");
+                        level_ = int(!homeSkipped_);
+                        current_path_.chop(current_path_.size() - current_path_.indexOf('/', 1));
                     }
-                    else
-                    {
-                        message = tr("File already exists");
-                    }
+                    selected_row_.resize(level_);
+                    showDBViews(category_id_, current_path_, 0);
                 }
-                else
-                {
-                    message = tr("Paste failed");
-                }
-
-                MessageDialog error(QMessageBox::Icon(QMessageBox::Warning) , tr("Paste failed"),
-                                    message, QMessageBox::Ok);
-                error.exec();
-            }
-            break;
-        default:
-            return;
-        }
-    }
-    else if (group == organizeActions_.category())
-    {
-        BookScanner scanner(book_extensions_);
-
-        switch (organizeActions_.selected())
-        {
-        case ORG_CATEGORIES:
-            organizeCategories(0);
-            return;
-        case ORG_SCANFLASH:
-            sys::SysStatus::instance().setSystemBusy(true);
-            scanner.scan("/media/flash");
-            sys::SysStatus::instance().setSystemBusy(false);
-            showBooks(category_id_, current_path_, treeview_.selected());
-            return;
-        case ORG_SCANSD:
-            sys::SysStatus::instance().setSystemBusy(true);
-            scanner.scan("/media/sd");
-            sys::SysStatus::instance().setSystemBusy(false);
-            showBooks(category_id_, current_path_, treeview_.selected());
-            return;
-        case ORG_SCANPATH:
-            sys::SysStatus::instance().setSystemBusy(true);
-            scanner.scan(fullFileName);
-            sys::SysStatus::instance().setSystemBusy(false);
-            break;
-        case ORG_ADD2APPS:
-            addApplication(CAT_APPS, fullFileName);     // TODO derive category id from database
-            break;
-        case ORG_ADD2GAMES:
-            addApplication(CAT_GAMES, fullFileName);
-            break;
-        case ORG_ADDWEBSITEICON:
-        {
-            QSqlQuery query(QString("UPDATE websites SET icon = '%1' WHERE url LIKE '%%2%'")
-                                   .arg(fullFileName)
-                                   .arg(QFileInfo(fullFileName).baseName()));
-
-            if (query.numRowsAffected() > 0)
-            {
-                qDebug() << "Set as website icon:" << fullFileName;
-            }
-            break;
-        }
-        case ORG_REMOVEAPP:
-        {
-            // Confirmation dialog
-            MessageDialog remove(QMessageBox::Icon(QMessageBox::Warning) , tr("Remove"),
-                                 tr("Do you want to remove %1?").arg(item->text()),
-                                 QMessageBox::Yes | QMessageBox::No);
-
-            if (remove.exec() == QMessageBox::Yes)
-            {
-                QSqlQuery query(QString("DELETE FROM applications WHERE executable = '%1' "
-                                        "AND category_id = '%2'").arg(item->data().toString())
-                                        .arg(category_id_));
-
-                if (query.numRowsAffected() > 0)
-                {
-                    qDebug() << "removed:" << item->data().toString();
-                    showApps(category_id_, current_path_, 0);
-                    return;
-                }
-            }
-            break;
-        }
-        case ORG_ADDWEBSITE:
-        {
-            treeview_.setHovering(false);
-            onyx::screen::instance().flush(this, onyx::screen::ScreenProxy::GU);
-
-            OnyxKeyboardDialog dialog(this, tr("Enter web address"));
-            QString url = dialog.popup("");
-            treeview_.setHovering(true);
-
-            if (!url.isEmpty())
-            {
-                QString name = url;
-                if (name.startsWith("http://"))
-                    name.remove("http://");
-                if (name.startsWith("www."))
-                    name.remove("www.");
-                name.truncate(name.lastIndexOf('.'));
-                name[0] = name[0].toUpper();
-
-                if (!url.startsWith("http://"))
-                    url.prepend("http://");
-
-                QString icon = "/usr/share/explorer/images/middle/websites.png";
-
-                QSqlQuery query(QString("INSERT INTO websites (name, url, icon) "
-                                        "VALUES ('%1', '%2', '%3')").arg(name).arg(url).arg(icon));
-
-                if (query.numRowsAffected() > 0)
-                {
-                    qDebug() << "added to websites:" << url;
-                    showWebsites(category_id_, current_path_, treeview_.selected());
-                    return;
-                }
-            }
-            break;
-        }
-        case ORG_REMOVEWEBSITE:
-        {
-            // Confirmation dialog
-            MessageDialog remove(QMessageBox::Icon(QMessageBox::Warning) , tr("Remove"),
-                                 tr("Do you want to remove %1?").arg(item->text()),
-                                 QMessageBox::Yes | QMessageBox::No);
-
-            if (remove.exec() == QMessageBox::Yes)
-            {
-                QSqlQuery query(QString("DELETE FROM websites WHERE url = '%1'")
-                                        .arg(item->data().toString()));
-
-                if (query.numRowsAffected() > 0)
-                {
-                    qDebug() << "removed:" << item->data().toString();
-                    showWebsites(category_id_, current_path_, 0);
-                    return;
-                }
-            }
-            break;
-        }
-        default:
-            return;
-        }
-    }
-    else if (group == settingsActions_.category())
-    {
-        switch (settingsActions_.selected())
-        {
-        case SET_TZ:
-        {
-            TimeZoneDialog dialog(this);
-            if (dialog.popup("Select Time Zone") == QDialog::Accepted)
-            {
-                if (SystemConfig::setTimezone(dialog.selectedTimeZone()))
-                {
-                    qDebug() << "set time zone:" << dialog.selectedTimeZone();
-                }
-            }
-            break;
-        }
-        case SET_PWR_MGMT:
-        {
-            PowerManagementDialog dialog(this, SysStatus::instance());
-            dialog.exec();
-            break;
-        }
-        case SET_CALIBRATE:
-            run("/opt/onyx/arm/bin/mouse_calibration", QStringList());
-            return;
-        case SET_WIFI:
-        {
-            WifiDialog dialog(this, SysStatus::instance());
-            dialog.popup();
-            return;
-        }
-        case SET_DEFAULTS:
-        {
-            // Confirmation dialog
-            MessageDialog defaults(QMessageBox::Icon(QMessageBox::Warning) , tr("Default Categories"),
-                                   tr("Do you want to restore the default categories and their content?"),
-                                   QMessageBox::Yes | QMessageBox::No);
-
-            if (defaults.exec() == QMessageBox::Yes)
-            {
-                DatabaseUtils::clearDatabase(QStringList() << "revision" << "books");
-                obx::initializeDatabase();
-                qDebug() << "default database restored";
-                selected_row_.clear();
-                level_ = 0;
-                handler_type_ = HDLR_HOME;
-                current_path_ = QString();
-                showHome(0);
                 return;
+            case ORG_SCANPATH:
+                sys::SysStatus::instance().setSystemBusy(true);
+                scanner.scan(fullFileName);
+                sys::SysStatus::instance().setSystemBusy(false);
+                break;
+            case ORG_SCANMUSICFLASH:
+                dir = "flash";
+                // fall through
+            case ORG_SCANMUSICSD:
+                sys::SysStatus::instance().setSystemBusy(true);
+                qDebug() << "updating mpd database...";
+                if (!QMpdClient::instance().updateDB(dir))
+                {
+                    sys::SysStatus::instance().setSystemBusy(false);
+                    break;
+                }
+                return;
+            case ORG_ADD2APPS:
+                addApplication("Applications", fullFileName);
+                break;
+            case ORG_ADD2GAMES:
+                addApplication("Games", fullFileName);
+                break;
+            case ORG_ADD2PLAYLIST:
+                addToPlaylist(item);
+                break;
+            case ORG_ADDWEBSITE:
+            {
+                treeview_.setHovering(false);
+                onyx::screen::instance().flush(this, onyx::screen::ScreenProxy::GU);
+
+                OnyxKeyboardDialog dialog(this, tr("Enter web address"));
+                QString url = dialog.popup("");
+                treeview_.setHovering(true);
+
+                if (!url.isEmpty())
+                {
+                    QString name = url;
+                    if (name.startsWith("http://"))
+                        name.remove("http://");
+                    if (name.startsWith("www."))
+                        name.remove("www.");
+                    name.truncate(name.lastIndexOf('.'));
+                    name[0] = name[0].toUpper();
+
+                    if (!url.startsWith("http://"))
+                        url.prepend("http://");
+
+                    QString icon = "/usr/share/explorer/images/middle/websites.png";
+
+                    QSqlQuery query(QString("INSERT INTO websites (name, url, icon) "
+                                            "VALUES ('%1', '%2', '%3')").arg(name).arg(url).arg(icon));
+
+                    if (query.numRowsAffected() > 0)
+                    {
+                        qDebug() << "added to websites:" << url;
+                        showWebsites(category_id_, current_path_, treeview_.selected());
+                        return;
+                    }
+                }
+                break;
             }
-            break;
+            case ORG_ADDWEBSITEICON:
+            {
+                QSqlQuery query(QString("UPDATE websites SET icon = '%1' WHERE url LIKE '%%2%'")
+                                       .arg(fullFileName)
+                                       .arg(QFileInfo(fullFileName).baseName()));
+
+                if (query.numRowsAffected() > 0)
+                {
+                    qDebug() << "Set as website icon:" << fullFileName;
+                }
+                break;
+            }
+            case ORG_REMOVEBOOK:
+            {
+                // Confirmation dialog
+                MessageDialog remove(QMessageBox::Icon(QMessageBox::Warning) , tr("Remove Book"),
+                                     tr("Do you want to remove %1?").arg(item->text()),
+                                     QMessageBox::Yes | QMessageBox::No);
+
+                if (remove.exec() == QMessageBox::Yes)
+                {
+                    QSqlQuery query(QString("DELETE FROM books WHERE file = '%1'")
+                                            .arg(item->data().toString()));
+
+                    if (query.numRowsAffected() > 0)
+                    {
+                        qDebug() << "removed:" << item->data().toString();
+                        showDBViews(category_id_, current_path_, 0);
+                        return;
+                    }
+                }
+                break;
+            }
+            case ORG_REMOVEALLBOOKS:
+            {
+                // Confirmation dialog
+                MessageDialog remove(QMessageBox::Icon(QMessageBox::Warning) , tr("Remove all Books"),
+                                     tr("Do you want to remove all books?"),
+                                     QMessageBox::Yes | QMessageBox::No);
+
+                if (remove.exec() == QMessageBox::Yes)
+                {
+                    QSqlQuery query("DELETE FROM books");
+
+                    qDebug() << "removed all books";
+                    if (handler_type_ == HDLR_BOOKS)
+                    {
+                        if (level_ > int(!homeSkipped_))
+                        {
+                            level_ = int(!homeSkipped_);
+                            current_path_.chop(current_path_.size() - current_path_.indexOf('/', 1));
+                        }
+                        selected_row_.resize(level_);
+                        showDBViews(category_id_, current_path_, 0);
+                        return;
+                    }
+                }
+                break;
+            }
+            case ORG_REMOVEAPP:
+            {
+                // Confirmation dialog
+                MessageDialog remove(QMessageBox::Icon(QMessageBox::Warning) , tr("Remove"),
+                                     tr("Do you want to remove %1?").arg(item->text()),
+                                     QMessageBox::Yes | QMessageBox::No);
+
+                if (remove.exec() == QMessageBox::Yes)
+                {
+                    QSqlQuery query(QString("DELETE FROM applications WHERE executable = '%1' "
+                                            "AND category_id = '%2'").arg(item->data().toString())
+                                            .arg(category_id_));
+
+                    if (query.numRowsAffected() > 0)
+                    {
+                        qDebug() << "removed:" << item->data().toString();
+                        showApps(category_id_, current_path_, 0);
+                        return;
+                    }
+                }
+                break;
+            }
+            case ORG_REMOVEWEBSITE:
+            {
+                // Confirmation dialog
+                MessageDialog remove(QMessageBox::Icon(QMessageBox::Warning) , tr("Remove"),
+                                     tr("Do you want to remove %1?").arg(item->text()),
+                                     QMessageBox::Yes | QMessageBox::No);
+
+                if (remove.exec() == QMessageBox::Yes)
+                {
+                    QSqlQuery query(QString("DELETE FROM websites WHERE url = '%1'")
+                                            .arg(item->data().toString()));
+
+                    if (query.numRowsAffected() > 0)
+                    {
+                        qDebug() << "removed:" << item->data().toString();
+                        showWebsites(category_id_, current_path_, 0);
+                        return;
+                    }
+                }
+                break;
+            }
+            default:
+                break;
+            }
         }
-        case SET_ABOUT:
+        else if (group == associateActions_.category())
         {
-            AboutDialog aboutDialog(mainUI_, this);
-            aboutDialog.exec();
-            break;
+            QString extension = extensions.at(associateActions_.selected());
+            QStringList viewerIds, viewers;
+            QSqlQuery query;
+            int viewerId = 0, index = 0;
+
+            query.exec(QString("SELECT viewers, viewer FROM associations WHERE extension = '%1'").arg(extension));
+            if (query.next())
+            {
+                viewerIds = query.value(0).toString().split(';');
+                viewerId = query.value(1).toInt();
+            }
+
+            for (int i = 0; i < viewerIds.count(); i++)
+            {
+                int numId = viewerIds.at(i).toInt();
+                query.exec(QString("SELECT name FROM applications WHERE id = %1").arg(numId));
+                if (query.next())
+                {
+                    viewers.append(query.value(0).toString());
+                    if (numId == viewerId)
+                    {
+                        index = i;
+                    }
+                }
+            }
+
+            AssociationDialog associationDialog(extension, viewers, index, this);
+            int selected = associationDialog.exec();
+            if (selected >= 0)
+            {
+                query.exec(QString("UPDATE associations SET viewer = %1 WHERE extension = '%2'")
+                                  .arg(viewerIds.at(selected))
+                                  .arg(extension));
+
+                if (query.numRowsAffected() > 0)
+                {
+                    qDebug() << "Associated" << extension << "with" << viewers.at(selected);
+                }
+            }
         }
-        default:
-            return;
+        else if (group == settingsActions_.category())
+        {
+            switch (settingsActions_.selected())
+            {
+            case SET_TZ:
+            {
+                TimeZoneDialog dialog(this);
+                if (dialog.popup("Select Time Zone") == QDialog::Accepted)
+                {
+                    if (SystemConfig::setTimezone(dialog.selectedTimeZone()))
+                    {
+                        qDebug() << "set time zone:" << dialog.selectedTimeZone();
+                    }
+                }
+                break;
+            }
+            case SET_PWR_MGMT:
+            {
+                LegacyPowerManagementDialog dialog(this, SysStatus::instance());
+                dialog.exec();
+                break;
+            }
+            case SET_CALIBRATE:
+                run("/opt/onyx/arm/bin/mouse_calibration", QStringList());
+                return;
+            case SET_DEFAULTS:
+            {
+                // Confirmation dialog
+                MessageDialog defaults(QMessageBox::Icon(QMessageBox::Warning) , tr("Default Categories"),
+                                       tr("Do you want to restore the default categories and their content?"),
+                                       QMessageBox::Yes | QMessageBox::No);
+
+                if (defaults.exec() == QMessageBox::Yes)
+                {
+                    DatabaseUtils::clearDatabase(QStringList() << "revision" << "books" << "music");
+                    obx::initializeDatabase();
+                    qDebug() << "default database restored";
+                    selected_row_.clear();
+                    level_ = 0;
+                    handler_type_ = HDLR_HOME;
+                    current_path_ = QString();
+                    showHome(0);
+                    return;
+                }
+                break;
+            }
+            case SET_ABOUT:
+            {
+                AboutDialog aboutDialog(mainUI_, this);
+                aboutDialog.exec();
+                break;
+            }
+            default:
+                break;
+            }
         }
+
+        refresh = true;
     }
 
-    onyx::screen::instance().flush(this, onyx::screen::ScreenProxy::GC);
+    QApplication::processEvents();
+    status_bar_.repaint();
+    onyx::screen::instance().updateWidget(&status_bar_, onyx::screen::ScreenProxy::GU,
+                                          false, onyx::screen::ScreenCommand::WAIT_ALL);
+    if (refresh)
+    {
+        onyx::screen::instance().flush(this, onyx::screen::ScreenProxy::GC);
+    }
+}
+
+void ExplorerView::onProgressClicked(int, int page)
+{
+    treeview_.jumpToPage(page);
 }
 
 void ExplorerView::keyPressEvent(QKeyEvent *ke)
@@ -1469,80 +1875,82 @@ void ExplorerView::keyPressEvent(QKeyEvent *ke)
 
 void ExplorerView::keyReleaseEvent(QKeyEvent *ke)
 {
+    QModelIndex index = model_.index(treeview_.selected(), 0);
+    QStandardItem *item = 0;
+    if (index.isValid())
+    {
+        item = model_.itemFromIndex(index);
+    }
+
     if (organize_mode_)
     {
-        QModelIndex index = model_.index(treeview_.selected(), 0);
-
-        if (index.isValid())
+        if (item)
         {
-            if (QStandardItem *item = model_.itemFromIndex(index))
+            switch(ke->key())
             {
-                switch(ke->key())
+            case Qt::Key_Left:
+            case Qt::Key_Right:
+            {
+                bool visible = (ke->key() == Qt::Key_Left ? 1 : 0);
+
+                if (visible != item->isSelectable())
                 {
-                case Qt::Key_Left:
-                case Qt::Key_Right:
+                    QSqlQuery query(QString("UPDATE categories SET visible = %1 WHERE id = %2")
+                                           .arg(visible)
+                                           .arg(item->data().toStringList()[0].toInt()));
+
+                    if (query.numRowsAffected() > 0)
+                    {
+                        waveform_ = onyx::screen::ScreenProxy::GU;
+                        organizeCategories(treeview_.selected());
+                    }
+                }
+                break;
+            }
+            case Qt::Key_PageUp:
+            case Qt::Key_PageDown:
+            case Qt::Key_Up:
+            case Qt::Key_Down:
+                treeview_.keyReleaseEvent(ke);
+                break;
+            case Qt::Key_Return:
+                if (treeview_.selected())
                 {
-                    bool visible = (ke->key() == Qt::Key_Left ? 1 : 0);
+                    int id;
+                    int position = item->data().toStringList()[1].toInt();
 
-                    if (visible != item->isSelectable())
+                    QSqlQuery query;
+                    query.exec(QString("SELECT id FROM categories WHERE position = %1").arg(position - 1));
+                    if (query.first())
                     {
-                        QSqlQuery query(QString("UPDATE categories SET visible = %1 WHERE id = %2")
-                                               .arg(visible)
-                                               .arg(item->data().toStringList()[0].toInt()));
-
-                        if (query.numRowsAffected() > 0)
-                        {
-                            waveform_ = onyx::screen::ScreenProxy::GU;
-                            organizeCategories(treeview_.selected());
-                        }
+                        id = query.value(0).toInt();
+                        query.exec(QString("UPDATE categories SET position = %1 WHERE id = %2")
+                                           .arg(position - 1)
+                                           .arg(item->data().toStringList()[0].toInt()));
+                        query.exec(QString("UPDATE categories SET position = %1 WHERE id = %2")
+                                           .arg(position)
+                                           .arg(id));
                     }
-                    break;
-                }
-                case Qt::Key_PageUp:
-                case Qt::Key_PageDown:
-                case Qt::Key_Up:
-                case Qt::Key_Down:
-                    treeview_.keyReleaseEvent(ke);
-                    break;
-                case Qt::Key_Return:
-                    if (treeview_.selected())
+
+                    if (query.numRowsAffected() > 0)
                     {
-                        int id;
-                        int position = item->data().toStringList()[1].toInt();
-
-                        QSqlQuery query;
-                        query.exec(QString("SELECT id FROM categories WHERE position = %1").arg(position - 1));
-                        if (query.first())
-                        {
-                            id = query.value(0).toInt();
-                            query.exec(QString("UPDATE categories SET position = %1 WHERE id = %2")
-                                               .arg(position - 1)
-                                               .arg(item->data().toStringList()[0].toInt()));
-                            query.exec(QString("UPDATE categories SET position = %1 WHERE id = %2")
-                                               .arg(position)
-                                               .arg(id));
-                        }
-
-                        if (query.numRowsAffected() > 0)
-                        {
-                            waveform_ = onyx::screen::ScreenProxy::GU;
-                            organizeCategories(treeview_.selected() - 1);
-                        }
+                        waveform_ = onyx::screen::ScreenProxy::GU;
+                        organizeCategories(treeview_.selected() - 1);
                     }
-                    break;
-                case Qt::Key_Escape:
-                    organize_mode_ = false;
-                    waveform_ = onyx::screen::ScreenProxy::GC;
-                    selected_row_.clear();
-                    level_ = 0;
-                    handler_type_ = HDLR_HOME;
-                    current_path_ = QString();
-                    showHome(0);
-                    break;
-                case Qt::Key_Menu:
-                default:
-                    break;
                 }
+                break;
+            case Qt::Key_Escape:
+                organize_mode_ = false;
+                waveform_ = onyx::screen::ScreenProxy::GC;
+                selected_row_.clear();
+                level_ = 0;
+                handler_type_ = HDLR_HOME;
+                current_path_ = QString();
+                showHome(0);
+                break;
+            case Qt::Key_Menu:
+            default:
+                break;
             }
         }
     }
@@ -1552,8 +1960,10 @@ void ExplorerView::keyReleaseEvent(QKeyEvent *ke)
         {
         case Qt::Key_Right:
         {
-            QKeyEvent keyEvent(QEvent::KeyRelease,Qt::Key_Return, Qt::NoModifier);
-            QApplication::sendEvent(&treeview_, &keyEvent);
+            if (handler_type_ == HDLR_MUSIC)
+            {
+                addToPlaylist(item);
+            }
             break;
         }
         case Qt::Key_PageUp:
@@ -1582,7 +1992,12 @@ void ExplorerView::keyReleaseEvent(QKeyEvent *ke)
                 }
                 else if (handler_type_ == HDLR_BOOKS)
                 {
-                    showBooks(category_id_, current_path_, row);
+                    showDBViews(category_id_, current_path_, row);
+                    break;
+                }
+                else if (handler_type_ == HDLR_MUSIC)
+                {
+                    showDBViews(category_id_, current_path_, row, QString(qgetenv("HOME")) + "/.mpd/music/");
                     break;
                 }
             }

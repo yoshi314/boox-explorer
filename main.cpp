@@ -1,4 +1,4 @@
-/*  Copyright (C) 2011  OpenBOOX
+/*  Copyright (C) 2011-2012 OpenBOOX
  *
  *  This program is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU General Public License
@@ -15,7 +15,7 @@
  *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-#include <QtSql/QSqlDatabase>
+#include <QSqlDatabase>
 
 #include "obx_explorer.h"
 #include "database_utils.h"
@@ -29,6 +29,7 @@ int main(int argc, char *argv[])
     createConnections();
 
     ObxExplorer app(argc, argv);
+    ObxExplorerAdaptor adaptor(&app);
 
     Q_INIT_RESOURCE(onyx_ui_images);
 
@@ -38,16 +39,17 @@ int main(int argc, char *argv[])
 static bool createConnections()
 {
     const int MAJOR_REV = 0;
-    const int MINOR_REV = 1;
+    const int MINOR_REV = 2;
 
     QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
-    db.setDatabaseName("/root/obx_explorer.db");
+    db.setDatabaseName(QString(qgetenv("HOME")) + "/obx_explorer.db");
     if (!db.open())
     {
         qDebug() << "Database Error";
         return false;
     }
 
+    qDebug() << "checking database revision...";
     QSqlQuery query("SELECT major, minor FROM revision WHERE id = 1");
 
     if (!query.next() || query.value(0).toInt() != MAJOR_REV || query.value(1).toInt() != MINOR_REV)
@@ -68,9 +70,11 @@ static bool createConnections()
 
         const QStringList queries = QStringList()
             << "CREATE TABLE revision (id INTEGER PRIMARY KEY, major NUMERIC, minor NUMERIC)"
-            << QString("INSERT INTO revision VALUES(1,%1,%2)").arg(MAJOR_REV).arg(MINOR_REV)
-            << "CREATE TABLE books (id INTEGER PRIMARY KEY, file TEXT, title TEXT, author TEXT, publisher TEXT,"
-               "year TEXT, series TEXT, series_index NUMERIC, add_date TEXT, read_date TEXT, read_count NUMERIC, cover TEXT)";
+            << QString("INSERT INTO revision VALUES(1, %1, %2)").arg(MAJOR_REV).arg(MINOR_REV)
+            << "CREATE TABLE books (id INTEGER PRIMARY KEY, file TEXT, title TEXT, author TEXT, publisher TEXT, "
+               "year TEXT, series TEXT, series_index NUMERIC, add_date TEXT, read_date TEXT, read_count NUMERIC, cover TEXT)"
+            << "CREATE TABLE music (id INTEGER PRIMARY KEY, file TEXT, title TEXT, artist TEXT, album TEXT, "
+               "album_artist TEXT, track NUMERIC, genre TEXT, year TEXT, add_date TEXT, play_date TEXT, play_count NUMERIC)";
 
         if (DatabaseUtils::execQueries(queries) != queries.size())
         {
@@ -83,14 +87,6 @@ static bool createConnections()
             qDebug() << "...initialization failed!";
             return false;
         }
-    }
-
-    db = QSqlDatabase::addDatabase("QSQLITE", "ONYX");
-    db.setDatabaseName("/root/content.db");
-    if (!db.open())
-    {
-        qDebug() << "Database Error";
-        return false;
     }
 
     return true;
