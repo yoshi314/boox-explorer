@@ -746,33 +746,39 @@ void ExplorerView::addToPlaylist(QStandardItem *item)
     }
 }
 
-QString ExplorerView::getByExtension(const QString &field, const QString &extension)
+QString ExplorerView::getByExtension(const QString &field, const QFileInfo &fileInfo)
 {
+    QStringList extensions = FileSystemUtils::suffixList(fileInfo);
     QString result;
     QSqlQuery query;
-    if (field == "viewer")
-    {
-        query.exec(QString("SELECT app.executable FROM applications app "
-                           "INNER JOIN associations file ON app.id = file.viewer "
-                           "WHERE file.extension = '%1'")
-                          .arg(extension));
-    }
-    else
-    {
-        query.exec(QString("SELECT %1 FROM associations WHERE extension = '%2'")
-                          .arg(field)
-                          .arg(extension));
-    }
 
-    if (query.first())
+    for (int i = 0; i < extensions.size(); i++)
     {
-        result = query.value(0).toString();
-    }
-    query.finish();
+        QString extension = extensions.at(i);
+        if (field == "viewer")
+        {
+            query.exec(QString("SELECT app.executable FROM applications app "
+                               "INNER JOIN associations file ON app.id = file.viewer "
+                               "WHERE file.extension = '%1'")
+                              .arg(extension));
+        }
+        else
+        {
+            query.exec(QString("SELECT %1 FROM associations WHERE extension = '%2'")
+                              .arg(field)
+                              .arg(extension));
+        }
 
-    if (QFile::exists(result))
-    {
-        return result;
+        if (query.first())
+        {
+            result = query.value(0).toString();
+        }
+        query.finish();
+
+        if (QFile::exists(result))
+        {
+            return result;
+        }
     }
 
     return QString();
@@ -793,7 +799,7 @@ QString ExplorerView::getIconByExtension(const QFileInfo &fileInfo)
         if (extIcon.isNull())
         {
             // Check database for extension icon
-            extIcon = getByExtension("icon", fileInfo.suffix());
+            extIcon = getByExtension("icon", fileInfo);
             if (extIcon.isNull())
             {
                 // Use one of the default icons
@@ -835,7 +841,7 @@ QString ExplorerView::getDisplayName(const QFileInfo &fileInfo)
 
 bool ExplorerView::openDocument(const QString &fullFileName)
 {
-    QString viewer = getByExtension("viewer", QFileInfo(fullFileName).suffix());
+    QString viewer = getByExtension("viewer", QFileInfo(fullFileName));
     if (!viewer.isNull())
     {
         QSqlQuery query;
@@ -1242,22 +1248,35 @@ void ExplorerView::popupMenu()
         if (item != 0)
         {
             doc << fullFileName;
-            QString extension = QFileInfo(doc[0]).suffix();
-            editor = getByExtension("editor", extension);
-
+            editor = getByExtension("editor", QFileInfo(doc[0]));
             QBitArray properties = item->data().toBitArray();
-            if (properties[0] == true || book_extensions_.contains(extension))
+
+            if (properties[0] == true)      // Directory
             {
                 organizeActions_.addAction(QIcon(":/images/scan.png"), tr("Scan Books From Here"), ORG_SCANPATH);
             }
-            else if (properties[1] == true)
+            else if (properties[1] == true) // Runnable
             {
                 organizeActions_.addAction(QIcon(":/images/applications.png"), tr("Add to Applications"), ORG_ADD2APPS);
                 organizeActions_.addAction(QIcon(":/images/games.png"), tr("Add to Games"), ORG_ADD2GAMES);
             }
-            else if (icon_extensions_.contains(extension))
+            else                            // Normal file
             {
-                organizeActions_.addAction(QIcon(":/images/website_icon.png"), tr("Set as Website icon"), ORG_ADDWEBSITEICON);
+                QStringList extensions = FileSystemUtils::suffixList(QFileInfo(doc[0]));
+                for (int i = 0; i < extensions.size(); i++)
+                {
+                    QString extension = extensions.at(i);
+                    if (book_extensions_.contains(extension))
+                    {
+                        organizeActions_.addAction(QIcon(":/images/scan.png"), tr("Scan Book"), ORG_SCANPATH);
+                        break;
+                    }
+                    else if (icon_extensions_.contains(extension))
+                    {
+                        organizeActions_.addAction(QIcon(":/images/website_icon.png"), tr("Set as Website icon"), ORG_ADDWEBSITEICON);
+                        break;
+                    }
+                }
             }
 
             fileActions_.initializeActions(QIcon(":/images/edit.png"), tr("File"));
@@ -1290,7 +1309,7 @@ void ExplorerView::popupMenu()
             organizeActions_.addAction(QIcon(":/images/delete.png"), tr("Remove Book"), ORG_REMOVEBOOK);
 
             doc << item->data().toString();
-            editor = getByExtension("editor", QFileInfo(doc[0]).suffix());
+            editor = getByExtension("editor", QFileInfo(doc[0]));
 
             if (!editor.isNull())
             {

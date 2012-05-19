@@ -108,34 +108,63 @@ bool FileSystemUtils::moveDir(const QString &source, const QString &destination)
     return result;
 }
 
-QString FileSystemUtils::getMatchingIcon(const QFileInfo &fileInfo, const QStringList &iconExtensions)
+QStringList FileSystemUtils::suffixList(const QFileInfo &fileInfo)
 {
+    QStringList suffixList = fileInfo.completeSuffix().split('.', QString::SkipEmptyParts);
     bool ok;
 
-    QString extension = fileInfo.suffix();
-    if (iconExtensions.contains(extension))
+    for (int i = suffixList.size() - 2; i >= 0; i--)
     {
-        return fileInfo.absoluteFilePath();
+        suffixList.at(i).toInt(&ok);
+        if (ok || suffixList.at(i).size() > 6)
+        {
+            for (int j = i; j >= 0; j--)
+            {
+                suffixList.removeAt(j);
+            }
+            break;
+        }
+
+        suffixList[i] += "." + suffixList.at(i + 1);
     }
 
-    extension.toInt(&ok);
+    return suffixList;
+}
+
+QString FileSystemUtils::getMatchingIcon(const QFileInfo &fileInfo, const QStringList &iconExtensions)
+{
+    QStringList extensions = suffixList(fileInfo);
 
     for (int i = 0; i < iconExtensions.size(); i++)
     {
         QString iconFileName = fileInfo.absoluteFilePath();
 
-        if (ok || extension.isEmpty())
+        if (extensions.isEmpty())
         {
             iconFileName.append(QString(".%1").arg(iconExtensions[i]));
+
+            if (QFile::exists(iconFileName))
+            {
+                return iconFileName;
+            }
         }
         else
         {
-            iconFileName.replace(fileInfo.suffix(), iconExtensions[i]);
-        }
+            for (int j = 0; j < extensions.size(); j++)
+            {
+                QString extension = extensions.at(j);
+                if (iconExtensions.contains(extension))
+                {
+                    return iconFileName;
+                }
 
-        if (QFile::exists(iconFileName))
-        {
-            return iconFileName;
+                iconFileName.replace(extension, iconExtensions[i]);
+
+                if (QFile::exists(iconFileName))
+                {
+                    return iconFileName;
+                }
+            }
         }
     }
 

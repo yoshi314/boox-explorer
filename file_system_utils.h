@@ -27,6 +27,7 @@ public:
     static bool copyDir(const QString &source, const QString &destination);
     static bool removeDir(const QString &dirName);
     static bool moveDir(const QString &source, const QString &destination);
+    static QStringList suffixList(const QFileInfo &fileInfo);
     static QString getMatchingIcon(const QFileInfo &fileInfo, const QStringList &iconExtensions);
     static QString getThumbnail(const QFileInfo &fileInfo, const QStringList &iconExtensions, bool update = false);
     static bool isSDMounted();

@@ -1,4 +1,4 @@
-/*  Copyright (C) 2011  OpenBOOX
+/*  Copyright (C) 2011-2012 OpenBOOX
  *
  *  This program is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU General Public License
@@ -27,7 +27,7 @@ namespace obx
 class BookScanner
 {
 public:
-    BookScanner(const QStringList &extensions);
+    BookScanner(const QStringList &bookExtensions);
     ~BookScanner();
 
 public:
@@ -37,7 +37,7 @@ private:
     bool scanFile(const QString &fileName);
 
 private:
-    QStringList extensions_;
+    QStringList book_extensions_;
 };
 
 }

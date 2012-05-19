@@ -28,9 +28,9 @@
 namespace obx
 {
 
-BookScanner::BookScanner(const QStringList &extensions)
+BookScanner::BookScanner(const QStringList &bookExtensions)
 {
-    extensions_ = extensions;
+    book_extensions_ = bookExtensions;
 }
 
 BookScanner::~BookScanner()
@@ -56,16 +56,29 @@ bool BookScanner::scan(const QString &path)
             }
             else
             {
-                if (extensions_.contains(info.suffix()))
+                QStringList extensions = FileSystemUtils::suffixList(info);
+                for (int i = 0; i < extensions.size(); i++)
                 {
-                    result |= scanFile(info.absoluteFilePath());
+                    if (book_extensions_.contains(extensions.at(i)))
+                    {
+                        result |= scanFile(info.absoluteFilePath());
+                        break;
+                    }
                 }
             }
         }
     }
-    else if (extensions_.contains(QFileInfo(path).suffix()))
+    else
     {
-        result = scanFile(path);
+        QStringList extensions = FileSystemUtils::suffixList(QFileInfo(path));
+        for (int i = 0; i < extensions.size(); i++)
+        {
+            if (book_extensions_.contains(extensions.at(i)))
+            {
+                result = scanFile(path);
+                break;
+            }
+        }
     }
 
     return result;

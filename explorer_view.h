@@ -79,7 +79,7 @@ private:
     QSqlQuery runDatabaseQuery(const QString &queryString, const QString &bindString = QString());
     void onCategoryActivated(const QStringList &stringList);
     void addToPlaylist(QStandardItem *item);
-    QString getByExtension(const QString &field, const QString &extension);
+    QString getByExtension(const QString &field, const QFileInfo &fileInfo);
     QString getIconByExtension(const QFileInfo &fileInfo);
     QString getDisplayName(const QFileInfo &fileInfo);
     bool openDocument(const QString &fullFileName);

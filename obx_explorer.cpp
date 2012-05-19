@@ -158,7 +158,7 @@ bool initializeDatabase()
         << "INSERT INTO associations VALUES(4,'mobi',10,NULL,NULL,'/usr/share/explorer/images/middle/mobi.png',2)"
         << "INSERT INTO associations VALUES(5,'pdf',9,NULL,NULL,'/usr/share/explorer/images/middle/pdf.png',2)"
         << "INSERT INTO associations VALUES(6,'fb2',10,'10;11',NULL,'/usr/share/explorer/images/middle/fb2.png',2)"
-//        << "INSERT INTO associations VALUES(7,'fb2.zip',10,'10;11',NULL,'/usr/share/explorer/images/middle/fb2.png',2)"
+        << "INSERT INTO associations VALUES(7,'fb2.zip',10,'10;11',NULL,'/usr/share/explorer/images/middle/fb2.png',2)"
         << "INSERT INTO associations VALUES(8,'html',14,'14;11',NULL,'/usr/share/explorer/images/middle/html.png',2)"
         << "INSERT INTO associations VALUES(9,'txt',10,'10;11','/opt/onyx/arm/bin/text_editor','/usr/share/explorer/images/middle/txt.png',2)"
         << "INSERT INTO associations VALUES(10,'rtf',10,'10;11',NULL,'/usr/share/explorer/images/middle/rtf.png',2)"

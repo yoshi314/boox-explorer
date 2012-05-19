@@ -1,4 +1,4 @@
-/*  Copyright (C) 2011  OpenBOOX
+/*  Copyright (C) 2011-2012 OpenBOOX
  *
  *  This program is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU General Public License
@@ -24,6 +24,7 @@
 #include <quazip/quazipfile.h>
 
 #include "metadata_reader.h"
+#include "file_system_utils.h"
 
 namespace obx
 {
@@ -54,45 +55,54 @@ void MetadataReader::collect()
     const QStringList dcProperties = QStringList() << "creator" << "date" << "publisher" << "title" << "meta";
     const QStringList xmpProperties = QStringList() << "CreateDate";
 
+    QStringList extensions = FileSystemUtils::suffixList(fileInfo_);
     QString xmlStream;
 
-    QFile opfFile(fileInfo_.absoluteFilePath().replace(fileInfo_.suffix(), "opf"));
-    if (opfFile.open(QIODevice::ReadOnly))
+    for (int i = 0; i < extensions.size(); i++)
     {
-        xmlStream = QString(opfFile.readAll());
-        opfFile.close();
-    }
-    else if (fileInfo_.suffix() == "epub")
-    {
-        QuaZip archive(fileInfo_.absoluteFilePath());
-        if (archive.open(QuaZip::mdUnzip))
+        QFile opfFile(fileInfo_.absoluteFilePath().replace(extensions.at(i), "opf"));
+        if (opfFile.open(QIODevice::ReadOnly))
         {
-            while (archive.goToNextFile())
+            xmlStream = QString(opfFile.readAll());
+            opfFile.close();
+            break;
+        }
+    }
+
+    if (xmlStream.isEmpty())
+    {
+        if (fileInfo_.suffix() == "epub")
+        {
+            QuaZip archive(fileInfo_.absoluteFilePath());
+            if (archive.open(QuaZip::mdUnzip))
             {
-                QString fileName = archive.getCurrentFileName();
-                if (fileName.endsWith(".opf"))
+                while (archive.goToNextFile())
                 {
-                    qDebug() << fileName;
-                    QuaZipFile zippedOpfFile(fileInfo_.absoluteFilePath(), fileName);
-                    zippedOpfFile.open(QIODevice::ReadOnly);
-                    xmlStream = QString(zippedOpfFile.readAll());
-                    zippedOpfFile.close();
-                    break;
+                    QString fileName = archive.getCurrentFileName();
+                    if (fileName.endsWith(".opf"))
+                    {
+                        qDebug() << fileName;
+                        QuaZipFile zippedOpfFile(fileInfo_.absoluteFilePath(), fileName);
+                        zippedOpfFile.open(QIODevice::ReadOnly);
+                        xmlStream = QString(zippedOpfFile.readAll());
+                        zippedOpfFile.close();
+                        break;
+                    }
                 }
+                archive.close();
             }
-            archive.close();
         }
-    }
-    else if (fileInfo_.suffix() == "pdf")
-    {
-        Poppler::Document *document = Poppler::Document::load(fileInfo_.absoluteFilePath());
-
-        if (document && !document->isLocked())
+        else if (fileInfo_.suffix() == "pdf")
         {
-            xmlStream = document->metadata();
-        }
+            Poppler::Document *document = Poppler::Document::load(fileInfo_.absoluteFilePath());
 
-        delete document;
+            if (document && !document->isLocked())
+            {
+                xmlStream = document->metadata();
+            }
+
+            delete document;
+        }
     }
 
     if (!xmlStream.isEmpty())
