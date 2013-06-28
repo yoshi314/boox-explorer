@@ -316,10 +316,20 @@ void ExplorerView::showDBViews(int category, const QString &path, int row, const
             item->setText(query.value(1).toString());
             item->setIcon(QIcon(getIconByExtension(fileInfo)));
             item->setData(fullFileName);
+
             if (!query.value(2).toString().isEmpty())
+   				//SELECT DISTINCT file, title, author, read_count 
+				//FROM books 
+				//WHERE read_date > :week_ago 
+				//ORDER BY read_date DESC
+				
+                //author data 
             {
-                //author data
-                item->setToolTip("By: " + query.value(2).toString());
+				if (!query.value(3).toString().isEmpty()) {  //read count
+					item->setToolTip(query.value(3).toString() + " reads ; By: " + query.value(2).toString());
+				}
+				else
+					item->setToolTip("By: " + query.value(2).toString());
             }
             item->setSelectable(fileInfo.exists());
             item->setEditable(false);
