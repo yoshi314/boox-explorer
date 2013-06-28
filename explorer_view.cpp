@@ -318,6 +318,7 @@ void ExplorerView::showDBViews(int category, const QString &path, int row, const
             item->setData(fullFileName);
             if (!query.value(2).toString().isEmpty())
             {
+                //author data
                 item->setToolTip("By: " + query.value(2).toString());
             }
             item->setSelectable(fileInfo.exists());
