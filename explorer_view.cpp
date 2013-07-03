@@ -531,7 +531,10 @@ QSqlQuery ExplorerView::runDatabaseQuery(const QString &queryString, const QStri
         }
     }
     query.exec();
-
+	
+	qDebug() << "query " << queryString;
+	qDebug() << "binds " <<  bindString;
+	
     return query;
 }
 
