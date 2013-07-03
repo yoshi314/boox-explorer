@@ -326,10 +326,13 @@ void ExplorerView::showDBViews(int category, const QString &path, int row, const
                 //author data 
             {
 				if (!query.value(3).toString().isEmpty()) {  //read count
+					qDebug("got read count");
 					item->setToolTip(query.value(3).toString() + " reads ; By: " + query.value(2).toString());
 				}
-				else
+				else {
+					qDebug("did not get read count");
 					item->setToolTip("By: " + query.value(2).toString());
+				}
             }
             item->setSelectable(fileInfo.exists());
             item->setEditable(false);
