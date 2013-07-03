@@ -330,7 +330,7 @@ void ExplorerView::showDBViews(int category, const QString &path, int row, const
 					item->setToolTip(query.value(3).toString() + " reads ; By: " + query.value(2).toString());
 				}
 				else {
-					qDebug("did not get read count");
+					qDebug << "did not get read count " << query.value(3).toString() ;
 					item->setToolTip("By: " + query.value(2).toString());
 				}
             }
