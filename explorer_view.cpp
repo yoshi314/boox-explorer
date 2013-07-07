@@ -166,6 +166,7 @@ ExplorerView::~ExplorerView()
 
 void ExplorerView::showHome(const int &row)
 {
+	qDebug(" >>> ExplorerView::showHome");
     category_id_ = 0;
 
     QSqlQuery query("SELECT name, icon, id, handler_id, handler_data FROM categories "
@@ -185,10 +186,12 @@ void ExplorerView::showHome(const int &row)
         query.seek(-1);
         showCategories("/", query, row);
     }
+    qDebug(" <<< ExplorerView::showHome");
 }
 
 void ExplorerView::showCategories(const QString &name, QSqlQuery &query, int row)
 {
+	qDebug(" <<< ExplorerView::showCategories");
     int i = 0;
     QFont itemFont;
     itemFont.setPointSize(22);
@@ -219,10 +222,13 @@ void ExplorerView::showCategories(const QString &name, QSqlQuery &query, int row
     model_.setHeaderData(0, Qt::Horizontal, name, Qt::DisplayRole);
 
     displayView(row);
+    
+    qDebug(" >>> ExplorerView::showCategories");
 }
 
 void ExplorerView::showFiles(int category, const QString &path, int row)
 {
+	qDebug(" <<< ExplorerView::showFiles");
     QFont itemFont;
     itemFont.setPointSize(20);
 
@@ -267,10 +273,12 @@ void ExplorerView::showFiles(int category, const QString &path, int row)
     model_.setHeaderData(0, Qt::Horizontal, dispPath, Qt::DisplayRole);
 
     displayView(row);
+    qDebug(" >>> ExplorerView::showFiles");
 }
 
 void ExplorerView::showDBViews(int category, const QString &path, int row, const QString &pathPrefix)
 {
+	qDebug(" >>> ExplorerView::showDBViews");
     int level = level_ - int(!homeSkipped_);
 
     category_id_ = category;
@@ -345,10 +353,12 @@ void ExplorerView::showDBViews(int category, const QString &path, int row, const
     model_.setHeaderData(0, Qt::Horizontal, path, Qt::DisplayRole);
 
     displayView(row);
+    qDebug(" <<< ExplorerView::showDBViews");
 }
 
 void ExplorerView::showApps(int category, const QString &name, int row)
 {
+	qDebug(" <<< ExplorerView::showApps");
     int i = 0;
     QFont itemFont;
     itemFont.setPointSize(22);
@@ -393,10 +403,12 @@ void ExplorerView::showApps(int category, const QString &name, int row)
     model_.setHeaderData(0, Qt::Horizontal, name, Qt::DisplayRole);
 
     displayView(row);
+    qDebug(" >>> ExplorerView::showApps");
 }
 
 void ExplorerView::showWebsites(int category, const QString &name, int row)
 {
+	qDebug(" <<< ExplorerView::showWebsites");
     int i = 0;
     QFont itemFont;
     itemFont.setPointSize(22);
@@ -430,10 +442,12 @@ void ExplorerView::showWebsites(int category, const QString &name, int row)
     model_.setHeaderData(0, Qt::Horizontal, name, Qt::DisplayRole);
 
     displayView(row);
+    qDebug(" >>> ExplorerView::showWebsites");
 }
 
 void ExplorerView::organizeCategories(int row)
 {
+	qDebug(" <<< ExplorerView::organizeCategories");
     int i = 0;
     QFont itemFont;
     itemFont.setPointSize(22);
@@ -461,10 +475,12 @@ void ExplorerView::organizeCategories(int row)
     model_.setHeaderData(0, Qt::Horizontal, "Organize Home Screen", Qt::DisplayRole);
 
     displayView(row);
+    qDebug(" >>> ExplorerView::organizeCategories");
 }
 
 void ExplorerView::displayView(int row)
 {
+	qDebug(" <<< ExplorerView::displayView");
     treeview_.clear();
     if (model_.rowCount())
     {
@@ -483,10 +499,12 @@ void ExplorerView::displayView(int row)
     {
         treeview_.select(index);
     }
+    qDebug(" >>> ExplorerView::displayView");
 }
 
 QSqlQuery ExplorerView::runDatabaseQuery(const QString &queryString, const QString &bindString)
 {
+	qDebug(" >>> ExplorerView::runDatabaseQuery");
     QSqlQuery query;
 
     query.prepare(queryString);
@@ -534,12 +552,14 @@ QSqlQuery ExplorerView::runDatabaseQuery(const QString &queryString, const QStri
 	
 	qDebug() << "query " << queryString;
 	qDebug() << "binds " <<  bindString;
+	qDebug(" <<< ExplorerView::runDatabaseQuery");
 	
     return query;
 }
 
 void ExplorerView::onItemActivated(const QModelIndex &index)
 {
+	qDebug(" >>> ExplorerView::runDatabaseQuery");
     QStandardItem *item = model_.itemFromIndex(index);
     if (!organize_mode_ && item != 0 && item->isSelectable())
     {
