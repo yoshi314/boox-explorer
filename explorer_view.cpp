@@ -1355,6 +1355,9 @@ void ExplorerView::popupMenu()
             }
         }
         organizeActions_.addAction(QIcon(":/images/delete.png"), tr("Remove all Books"), ORG_REMOVEALLBOOKS);
+        //----- remove obsolete book entries
+        //TODO:
+        //organizeActions_.addAction(QIcon(":"), tr("Clean up Database"), ORG_DBCLEANUP);
         break;
     case HDLR_APPS:
         if (item != 0)
