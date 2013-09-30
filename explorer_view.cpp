@@ -1357,7 +1357,7 @@ void ExplorerView::popupMenu()
         organizeActions_.addAction(QIcon(":/images/delete.png"), tr("Remove all Books"), ORG_REMOVEALLBOOKS);
         //----- remove obsolete book entries
         //TODO:
-        //organizeActions_.addAction(QIcon(":"), tr("Clean up Database"), ORG_DBCLEANUP);
+        organizeActions_.addAction(QIcon(":/images/delete.png"), tr("Clean up Database"), ORG_DBCLEANUP);
         break;
     case HDLR_APPS:
         if (item != 0)
@@ -1737,6 +1737,30 @@ void ExplorerView::popupMenu()
                 }
                 break;
             }
+	    
+			case ORG_DBCLEANUP:
+			{
+				// Confirmation dialog
+				MessageDialog cleanup(QMessageBox::Icon(QMessageBox::Warning) , tr("Clean up database"),
+							tr("Do you want to clean up obsolete entries? "),
+							QMessageBox::Yes | QMessageBox::No);
+				if (cleanup.exec() == QMessageBox::Yes)
+				{
+					query.exec(QString("SELECT filename FROM books"));
+					while (query.next())
+					{
+						QFile bookfile(query.value(0).toString());
+						if (!bookfile.exists()) {
+							//delete entry
+							qDebug() << "will delete entry for " << query.value(0).toString();
+							query.exec(QString("DELETE FROM books where file='%1'").query.value(0).toString());
+						}
+					}
+
+				}
+				break;
+			}
+
             case ORG_REMOVEALLBOOKS:
             {
                 // Confirmation dialog
