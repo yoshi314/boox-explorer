@@ -69,6 +69,7 @@ static bool createConnections()
         qDebug() << "initializing database...";
 
         const QStringList queries = QStringList()
+			/* structures */
             << "CREATE TABLE revision (id INTEGER PRIMARY KEY, major NUMERIC, minor NUMERIC)"
             << QString("INSERT INTO revision VALUES(1, %1, %2)").arg(MAJOR_REV).arg(MINOR_REV)
             
@@ -80,7 +81,18 @@ static bool createConnections()
             << "CREATE TABLE associations (id INTEGER PRIMARY KEY, extension TEXT, viewer NUMERIC, viewers TEXT, editor TEXT, icon TEXT, handler_id NUMERIC)"
             << "CREATE TABLE views (id INTEGER PRIMARY KEY, position NUMERIC, visible NUMERIC, name TEXT, handler_id NUMERIC, handler_data TEXT, icon TEXT)"
             << "CREATE TABLE applications (id INTEGER PRIMARY KEY, name TEXT, executable TEXT, options TEXT, icon TEXT, category_id NUMERIC)"
-            << "CREATE TABLE websites (id INTEGER PRIMARY KEY, name TEXT, url TEXT, icon TEXT)"       
+            << "CREATE TABLE websites (id INTEGER PRIMARY KEY, name TEXT, url TEXT, icon TEXT)"   
+            /* indexes */
+            << "CREATE INDEX books_i_file ON books ( file ) "
+            << "CREATE INDEX books_i_rcount ON books ( read_count ) "
+            << "CREATE INDEX books_i_year ON books ( year )"
+            << "CREATE INDEX books_i_author ON books ( author )"
+            << "CREATE INDEX books_i_pub ON books ( publisher )"
+            << "CREATE INDEX books_i_series ON books ( series )"
+            << "CREATE INDEX books_i_series_idx ON books ( series_index )"
+            << "CREATE INDEX books_i_rdate ON books ( read_date )"
+            << "CREATE INDEX books_i_adate ON books ( add_date )"
+            << "CREATE INDEX applications_i_hid ON applications ( handler_id )"
             ;
 
         if (DatabaseUtils::execQueries(queries) != queries.size())
