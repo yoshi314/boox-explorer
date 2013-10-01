@@ -142,7 +142,7 @@ void ObxExplorer::onWpaConnectionChanged(WifiProfile, WpaConnection::ConnectionS
 bool initializeDatabase()
 {
     const QStringList queries = QStringList()
-        << "CREATE TABLE categories (id INTEGER PRIMARY KEY, position NUMERIC, visible NUMERIC, name TEXT, handler_id NUMERIC, handler_data TEXT, icon TEXT)"
+        
         << "INSERT INTO categories VALUES(1,1,1,'Internal Flash',1,'/media/flash','/usr/share/explorer/images/middle/directory.png')"
         << "INSERT INTO categories VALUES(2,2,1,'SD Card',1,'/media/sd','/usr/share/explorer/images/middle/sd.png')"
         << "INSERT INTO categories VALUES(3,3,1,'Books',2,NULL,'/usr/share/explorer/images/middle/library.png')"
@@ -151,7 +151,7 @@ bool initializeDatabase()
         << "INSERT INTO categories VALUES(6,6,1,'Games',3,NULL,'/usr/share/explorer/images/middle/games.png')"
         << "INSERT INTO categories VALUES(7,7,1,'Websites',4,NULL,'/usr/share/explorer/images/middle/websites.png')"
         << "INSERT INTO categories VALUES(8,8,1,'Scribbles',1,'/root/notes','/usr/share/explorer/images/middle/notes.png')"
-        << "CREATE TABLE associations (id INTEGER PRIMARY KEY, extension TEXT, viewer NUMERIC, viewers TEXT, editor TEXT, icon TEXT, handler_id NUMERIC)"
+
         << "INSERT INTO associations VALUES(1,'chm',12,'12;10;11',NULL,'/usr/share/explorer/images/middle/chm.png',2)"
         << "INSERT INTO associations VALUES(2,'djvu',13,NULL,NULL,'/usr/share/explorer/images/middle/djvu.png',2)"
         << "INSERT INTO associations VALUES(3,'epub',9,'9;10;11',NULL,'/usr/share/explorer/images/middle/epub.png',2)"
@@ -180,7 +180,7 @@ bool initializeDatabase()
         << "INSERT INTO associations VALUES(26,'tiff',17,NULL,NULL,'/usr/share/explorer/images/middle/tiff.png',NULL)"
         << "INSERT INTO associations VALUES(27,'mp3',NULL,NULL,NULL,'/usr/share/explorer/images/middle/mp3.png',5)"
         << "INSERT INTO associations VALUES(28,'flac',NULL,NULL,NULL,'/usr/share/explorer/images/middle/flac.png',5)"
-        << "CREATE TABLE views (id INTEGER PRIMARY KEY, position NUMERIC, visible NUMERIC, name TEXT, handler_id NUMERIC, handler_data TEXT, icon TEXT)"
+        
         << "INSERT INTO views VALUES(1,1,1,'Recently Read',2,'SELECT DISTINCT file, title, author, read_count FROM books WHERE read_date > :week_ago ORDER BY read_date DESC, upper(title), title','/usr/share/explorer/images/middle/book.png')"
         << "INSERT INTO views VALUES(2,2,1,'New',2,'SELECT DISTINCT file, title, author FROM books WHERE add_date > :week_ago ORDER BY add_date DESC, upper(title), title','/usr/share/explorer/images/middle/new.png')"
         << "INSERT INTO views VALUES(3,3,1,'By Title',2,'SELECT DISTINCT file, title, author FROM books ORDER BY upper(title), title','/usr/share/explorer/images/middle/dictionary.png')"
@@ -196,7 +196,7 @@ bool initializeDatabase()
         << "INSERT INTO views VALUES(13,5,1,'By Year',5,'SELECT DISTINCT year FROM music ORDER BY year;SELECT DISTINCT file, title, artist FROM music WHERE year = :year ORDER BY upper(title), title','/usr/share/explorer/images/middle/calendar.png')"
         << "INSERT INTO views VALUES(14,6,1,'By Genre',5,'SELECT DISTINCT genre FROM music ORDER BY upper(genre), genre;SELECT DISTINCT file, title, artist FROM music WHERE genre = :genre ORDER BY title','/usr/share/explorer/images/middle/genre.png')"
         << "INSERT INTO views VALUES(15,7,1,'Undiscovered',5,'SELECT DISTINCT file, title, artist FROM music WHERE play_count = 0 ORDER BY upper(title), title','/usr/share/explorer/images/middle/undiscovered.png')"
-        << "CREATE TABLE applications (id INTEGER PRIMARY KEY, name TEXT, executable TEXT, options TEXT, icon TEXT, category_id NUMERIC)"
+        
         << "INSERT INTO applications VALUES(1,'Dictionary','/opt/onyx/arm/bin/dict_tool',NULL,'/usr/share/explorer/images/middle/dictionary.png',5)"
         << "INSERT INTO applications VALUES(2,'Text Editor','/opt/onyx/arm/bin/text_editor',NULL,'/usr/share/explorer/images/middle/write_pad.png',5)"
         << "INSERT INTO applications VALUES(3,'Scribbler','/opt/onyx/arm/bin/scribbler',NULL,'/usr/share/explorer/images/middle/note.png',5)"
@@ -215,7 +215,7 @@ bool initializeDatabase()
         << "INSERT INTO applications VALUES(16,'ComicReader','/opt/onyx/arm/bin/comic_reader',NULL,NULL,NULL)"
         << "INSERT INTO applications VALUES(17,'ImageReader','/opt/onyx/arm/bin/image_reader',NULL,NULL,NULL)"
         << "INSERT INTO applications VALUES(17,'RSS Reader','/opt/onyx/arm/bin/rss_reader',NULL,NULL,NULL)"
-        << "CREATE TABLE websites (id INTEGER PRIMARY KEY, name TEXT, url TEXT, icon TEXT)"
+
         << "INSERT INTO websites VALUES(1,'Google','http://www.google.com','/usr/share/explorer/images/middle/google.png')"
         << "INSERT INTO websites VALUES(2,'Wikipedia','http://en.wikipedia.org','/usr/share/explorer/images/middle/wiki.png')";
 
