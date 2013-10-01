@@ -1739,28 +1739,27 @@ void ExplorerView::popupMenu()
                 break;
             }
 	    
-			case ORG_DBCLEANUP:
+		case ORG_DBCLEANUP:
+		{
+			// Confirmation dialog
+			MessageDialog cleanup(QMessageBox::Icon(QMessageBox::Warning) , tr("Clean up database"),
+						tr("Do you want to clean up obsolete entries? "),
+						QMessageBox::Yes | QMessageBox::No);
+			if (cleanup.exec() == QMessageBox::Yes)
 			{
-				// Confirmation dialog
-				MessageDialog cleanup(QMessageBox::Icon(QMessageBox::Warning) , tr("Clean up database"),
-							tr("Do you want to clean up obsolete entries? "),
-							QMessageBox::Yes | QMessageBox::No);
-				if (cleanup.exec() == QMessageBox::Yes)
+				query.exec(QString("SELECT filename FROM books"));
+				while (query.next())
 				{
-					query.exec(QString("SELECT filename FROM books"));
-					while (query.next())
-					{
-						QFile bookfile(query.value(0).toString());
-						if (!bookfile.exists()) {
-							//delete entry
-							qDebug() << "will delete entry for " << query.value(0).toString();
-							query.exec(QString("DELETE FROM books where file='%1'").query.value(0).toString());
-						}
+					QFile bookfile(query.value(0).toString());
+					if (!bookfile.exists()) {
+						//delete entry
+						qDebug() << "will delete entry for " << query.value(0).toString();
+						query.exec(QString("DELETE FROM books where file='%1'").arg(query.value(0).toString()));
 					}
-
 				}
-				break;
 			}
+			break;
+		}
 
             case ORG_REMOVEALLBOOKS:
             {
