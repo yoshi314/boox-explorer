@@ -106,6 +106,7 @@ bool BookScanner::scanFile(const QString &fileName)
                               ":series_index, :add_date, :read_count, :cover)");
         query.bindValue(":add_date", QDateTime::currentDateTime().toString(Qt::ISODate));
         query.bindValue(":read_count", 0);
+    	qDebug << "BookScanner :: insert - " << fileName << " " << metadata.calibreSeries() << " " << metadata.calibreSeriesIndex() ;
     }
     else
     {
@@ -114,6 +115,7 @@ bool BookScanner::scanFile(const QString &fileName)
                       "SET title = :title, author = :author, publisher = :publisher, year = :year, "
                           "series = :series, series_index = :series_index, cover = :cover "
                       "WHERE file = :file");
+    	qDebug << "BookScanner :: update - " << fileName << " " << metadata.calibreSeries() << " " << metadata.calibreSeriesIndex() ;
     }
 
     query.bindValue(":file", fileName);
@@ -128,6 +130,7 @@ bool BookScanner::scanFile(const QString &fileName)
     result = query.exec();
 
     FileSystemUtils::getThumbnail(QFileInfo(fileName), QStringList() << "png" << "jpg", true);
+
 
     return result;
 }
