@@ -214,6 +214,7 @@ bool initializeDatabase()
         << "INSERT INTO applications VALUES(15,'OfficeViewer','/opt/onyx/arm/bin/office_viewer',NULL,NULL,NULL)"
         << "INSERT INTO applications VALUES(16,'ComicReader','/opt/onyx/arm/bin/comic_reader',NULL,NULL,NULL)"
         << "INSERT INTO applications VALUES(17,'ImageReader','/opt/onyx/arm/bin/image_reader',NULL,NULL,NULL)"
+        << "INSERT INTO applications VALUES(17,'RSS Reader','/opt/onyx/arm/bin/rss_reader',NULL,NULL,NULL)"
         << "CREATE TABLE websites (id INTEGER PRIMARY KEY, name TEXT, url TEXT, icon TEXT)"
         << "INSERT INTO websites VALUES(1,'Google','http://www.google.com','/usr/share/explorer/images/middle/google.png')"
         << "INSERT INTO websites VALUES(2,'Wikipedia','http://en.wikipedia.org','/usr/share/explorer/images/middle/wiki.png')";
