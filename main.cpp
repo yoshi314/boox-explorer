@@ -92,7 +92,7 @@ static bool createConnections()
             << "CREATE INDEX books_i_series_idx ON books ( series_index )"
             << "CREATE INDEX books_i_rdate ON books ( read_date )"
             << "CREATE INDEX books_i_adate ON books ( add_date )"
-            << "CREATE INDEX applications_i_hid ON applications ( handler_id )"
+            << "CREATE INDEX applications_i_hid ON applications ( category_id )"
             ;
 
         if (DatabaseUtils::execQueries(queries) != queries.size())

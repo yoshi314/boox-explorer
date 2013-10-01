@@ -1757,6 +1757,8 @@ void ExplorerView::popupMenu()
 						//qDebug() << delquery.lastError();
 					}
 				}
+				//vacuum db; provides significant size reduction when many books have been deleted
+				QSqlQuery cleanupquery(QString("vacuum"));
 			}
 			break;
 		}
