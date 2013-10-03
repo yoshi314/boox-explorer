@@ -39,6 +39,7 @@ MetadataReader::MetadataReader(const QString &fileName)
 
     calibre_series_ = QString();
     calibre_series_index_ = 0;
+//    qDebug() << "MetadataReader instantiated : for " << fileName ;
 }
 
 MetadataReader::~MetadataReader()
@@ -47,6 +48,7 @@ MetadataReader::~MetadataReader()
 
 void MetadataReader::collect()
 {
+	qDebug() << "MetadataReader::collect() " ;
     typedef enum { NS_NONE = -1, NS_DC, NS_XMP, NS_XAP } NamespaceType;
     typedef enum { DC_NONE = -1, DC_CREATOR, DC_DATE, DC_PUBLISHER, DC_TITLE, DC_META } DcPropertyType;
     typedef enum { XMP_NONE = -1, XMP_CREATEDATE } XmpPropertyType;
@@ -201,7 +203,7 @@ void MetadataReader::collect()
                         {
                         case DC_CREATOR:
                             author_ << value;
-                            qDebug() << "creator:" << value;
+//                            qDebug() << "creator:" << value;
                             break;
                         case DC_DATE:
                         {
@@ -210,16 +212,16 @@ void MetadataReader::collect()
                             {
                                 year_ = yearString;
                             }
-                            qDebug() << "date:" << value;
+//                            qDebug() << "date:" << value;
                             break;
                         }
                         case DC_PUBLISHER:
                             publisher_ = value;
-                            qDebug() << "publisher:" << value;
+//                            qDebug() << "publisher:" << value;
                             break;
                         case DC_TITLE:
                             title_ = value;
-                            qDebug() << "title:" << value;
+//                            qDebug() << "title:" << value;
                         default:
                             break;
                         }
@@ -235,7 +237,7 @@ void MetadataReader::collect()
                             {
                                 year_ = yearString;
                             }
-                            qDebug() << "CreateDate:" << value;
+//                            qDebug() << "CreateDate:" << value;
                             break;
                         }
                         default:
@@ -325,26 +327,36 @@ void MetadataReader::calibreCollect(QXmlStreamAttributes attributes)
     typedef enum { CLB_NONE = -1, CLB_SERIES, CLB_SERIES_INDEX } ClbPropertyType;
     const QStringList clbProperties = QStringList() << "calibre:series" << "calibre:series_index";
     QString contentString;
+//    qDebug() << "MetadataReader::calibreCollect " ;
 
     for (int i = 0; i < attributes.size(); i++)
     {
+		qDebug() << "MetadataReader::calibreCollect [ " << i << "]: name " << attributes[i].name() << " value " << attributes[i].value().toString() ; 
         if (attributes[i].name() == "content")
         {
             contentString = attributes[i].value().toString();
         }
         else if (attributes[i].name() == "name")
         {
+			contentString = attributes[i].value().toString();
+//			qDebug() << "name :: " << attributes[i].name() << " content: " << attributes[i].value().toString() ; 
             ClbPropertyType clbPropertyId = ClbPropertyType(clbProperties.indexOf(attributes[i].value().toString()));
-
+//			qDebug() << "clbPropertyId" << clbPropertyId ;
             switch (clbPropertyId)
             {
+				
             case CLB_SERIES:
-                calibre_series_ = contentString;
-                qDebug() << "calibre:series:" << calibre_series_;
+                calibre_series_ = attributes[++i].value().toString();
+//                qDebug() << "calibre:series:" << calibre_series_;
+//                qDebug() << "name :: " << attributes[i].name() << " content: " << attributes[i].value().toString() ; 
                 break;
             case CLB_SERIES_INDEX:
-                calibre_series_index_ = contentString.toInt();
-                qDebug() << "calibre:series_index:" << calibre_series_index_;
+            //this can be dangerous if column is defined as numeric in sqlite, as some books
+            //may have series as 1.2 in floating type
+                calibre_series_index_ = attributes[++i].value().toString().toFloat();
+//                qDebug() << "calibre:series_index:" << calibre_series_index_;
+//              qDebug() << "name :: " << attributes[i].name() << " content: " << attributes[i].value().toString() ; 
+//				qDebug() << "name :: " << attributes[i].name() << " content: " << attributes[i].value().toString().toFloat() ; 
                 break;
             default:
                 break;
