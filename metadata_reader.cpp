@@ -327,39 +327,38 @@ void MetadataReader::calibreCollect(QXmlStreamAttributes attributes)
     typedef enum { CLB_NONE = -1, CLB_SERIES, CLB_SERIES_INDEX } ClbPropertyType;
     const QStringList clbProperties = QStringList() << "calibre:series" << "calibre:series_index";
     QString contentString;
-//    qDebug() << "MetadataReader::calibreCollect " ;
-
     for (int i = 0; i < attributes.size(); i++)
     {
-		qDebug() << "MetadataReader::calibreCollect [ " << i << "]: name " << attributes[i].name() << " value " << attributes[i].value().toString() ; 
+		qDebug() << "attrname " << i << " " << attributes[i].name() << " " << attributes[i].value().toString();
         if (attributes[i].name() == "content")
         {
             contentString = attributes[i].value().toString();
         }
         else if (attributes[i].name() == "name")
         {
-			contentString = attributes[i].value().toString();
-//			qDebug() << "name :: " << attributes[i].name() << " content: " << attributes[i].value().toString() ; 
-            ClbPropertyType clbPropertyId = ClbPropertyType(clbProperties.indexOf(attributes[i].value().toString()));
-//			qDebug() << "clbPropertyId" << clbPropertyId ;
+			ClbPropertyType clbPropertyId = ClbPropertyType(clbProperties.indexOf(attributes[i].value().toString()));
+			
+			//parameters in calibre are often reversed (value, name)
+			//which made this checks come up empty
+			
+			//there is an assumption that they go in pairs of 0 and 1. 
+			//might crash if something is changed in calibre metadata someday
+			
             switch (clbPropertyId)
             {
-				
-            case CLB_SERIES:
-                calibre_series_ = attributes[++i].value().toString();
-//                qDebug() << "calibre:series:" << calibre_series_;
-//                qDebug() << "name :: " << attributes[i].name() << " content: " << attributes[i].value().toString() ; 
-                break;
-            case CLB_SERIES_INDEX:
-            //this can be dangerous if column is defined as numeric in sqlite, as some books
-            //may have series as 1.2 in floating type
-                calibre_series_index_ = attributes[++i].value().toString().toFloat();
-//                qDebug() << "calibre:series_index:" << calibre_series_index_;
-//              qDebug() << "name :: " << attributes[i].name() << " content: " << attributes[i].value().toString() ; 
-//				qDebug() << "name :: " << attributes[i].name() << " content: " << attributes[i].value().toString().toFloat() ; 
-                break;
-            default:
-                break;
+				case CLB_SERIES:
+					//qDebug() << "attrname " << 1-i << " " << attributes[1-i].name() << " " << attributes[1-i].value().toString();
+					calibre_series_ = attributes[1-i].value().toString();
+					//qDebug() << " got series as " << calibre_series_;
+					break;
+				case CLB_SERIES_INDEX:
+					qDebug() << "attrname " << 1-i << " " << attributes[1-i].name() << " " << attributes[1-i].value().toString();
+					calibre_series_index_ = 
+						attributes[1-i].value().toString().remove(QChar('.'), Qt::CaseInsensitive).toInt();
+						//qDebug() << " got index as " << calibre_series_index_;
+					break;
+				default:
+					break;
             }
         }
     }
