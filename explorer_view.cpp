@@ -326,23 +326,55 @@ void ExplorerView::showDBViews(int category, const QString &path, int row, const
             item->setIcon(QIcon(getIconByExtension(fileInfo)));
             item->setData(fullFileName);
 
+			QString tooltip("");
+			QSqlRecord rec = query.record();
+			
+			//figure out where each column is at; if it exists
+			int authorCol = rec.indexOf("author");
+			int seriesCol = rec.indexOf("series");
+			int seriesIdxCol = rec.indexOf("series_index");
+			int readCountCol = rec.indexOf("read_count");
+			
+			//if we have series info
+			if (seriesCol > 0) {
+				//if we also have index in the series
+				if (seriesIdxCol > 0) {
+					tooltip += QString("Book " 
+						+ query.value(seriesIdxCol).toString()
+						+ " in " 
+						+ query.value(seriesCol).toString());
+				} else {
+					tooltip += QString("Series: "
+						+ query.value(seriesCol).toString());
+				}
+			}
+			//if we have author info
+			if (authorCol > 0) 
+				tooltip += QString(" By: " + query.value(authorCol).toString());
+				
+			if (readCountCol > 0) 
+				tooltip += QString(" " + query.value(readCountCol).toString() + " reads");
+			
+			item->setToolTip(tooltip);
+			
+			/*
+			//add author if not empty
             if (!query.value(2).toString().isEmpty())
-   				//SELECT DISTINCT file, title, author, read_count 
+            
+   				//SELECT DISTINCT file, title, author, read_count, series_index, series 
 				//FROM books 
 				//WHERE read_date > :week_ago 
 				//ORDER BY read_date DESC
-				
                 //author data 
             {
-				if (!query.value(3).toString().isEmpty()) {  //read count
-					qDebug("got read count");
+				if (!query.value(3).toString().isEmpty()) {  //add read count, if nonzero
 					item->setToolTip(query.value(3).toString() + " reads ; By: " + query.value(2).toString());
 				}
 				else {
-					qDebug() << "did not get read count " << query.value(3).toString() ;
 					item->setToolTip("By: " + query.value(2).toString());
 				}
             }
+            */
             item->setSelectable(fileInfo.exists());
             item->setEditable(false);
             item->setFont(itemFont);
