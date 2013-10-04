@@ -336,16 +336,22 @@ void ExplorerView::showDBViews(int category, const QString &path, int row, const
 			int seriesIdxCol = rec.indexOf("series_index");
 			int readCountCol = rec.indexOf("read_count");
 			
-			//if we have series info
-			if (seriesCol > 0) {
-				//if we also have index in the series
+			//if we have series column
+			if (seriesCol > 0 ) {
+				//if we also have index column
 				if (seriesIdxCol > 0) {
-					tooltip += QString("Book " 
+					//make sure values are not empty; otherwise no point printing them
+					if (!query.value(seriesIdxCol).toString().trimmed().isEmpty() && 
+						!query.value(seriesCol).toString(),trimmed().isEmpty())
+											
+						tooltip += QString("Book " 
 						+ query.value(seriesIdxCol).toString()
-						+ " in " 
+						+ " of " 
 						+ query.value(seriesCol).toString());
-				} else {
-					tooltip += QString("Series: "
+						
+				} else {  //if we only have series column
+					if (!query.value(seriesCol).toString(),trimmed().isEmpty())
+						tooltip += QString("Series: "
 						+ query.value(seriesCol).toString());
 				}
 			}
@@ -932,7 +938,6 @@ bool ExplorerView::openDocument(const QString &fullFileName)
 			//no such book entry in database; let's scan it.
 			BookScanner adhoc_scanner(book_extensions_);
 			adhoc_scanner.scan(fullFileName);
-			delete adhoc_scanner;
 		}
 
         qDebug() << "view:" << fullFileName;
