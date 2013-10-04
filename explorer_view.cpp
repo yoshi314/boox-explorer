@@ -932,7 +932,6 @@ bool ExplorerView::openDocument(const QString &fullFileName)
 			//no such book entry in database; let's scan it.
 			BookScanner adhoc_scanner(book_extensions_);
 			adhoc_scanner.scan(fullFileName);
-			delete adhoc_scanner;
 		}
 
         qDebug() << "view:" << fullFileName;
