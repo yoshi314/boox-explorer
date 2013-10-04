@@ -48,7 +48,7 @@ MetadataReader::~MetadataReader()
 
 void MetadataReader::collect()
 {
-	qDebug() << "MetadataReader::collect() " ;
+//	qDebug() << "MetadataReader::collect() " ;
     typedef enum { NS_NONE = -1, NS_DC, NS_XMP, NS_XAP } NamespaceType;
     typedef enum { DC_NONE = -1, DC_CREATOR, DC_DATE, DC_PUBLISHER, DC_TITLE, DC_META } DcPropertyType;
     typedef enum { XMP_NONE = -1, XMP_CREATEDATE } XmpPropertyType;
@@ -83,7 +83,7 @@ void MetadataReader::collect()
                     QString fileName = archive.getCurrentFileName();
                     if (fileName.endsWith(".opf"))
                     {
-                        qDebug() << fileName;
+//                        qDebug() << fileName;
                         QuaZipFile zippedOpfFile(fileInfo_.absoluteFilePath(), fileName);
                         zippedOpfFile.open(QIODevice::ReadOnly);
                         xmlStream = QString(zippedOpfFile.readAll());
