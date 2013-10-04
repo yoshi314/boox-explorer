@@ -39,7 +39,7 @@ int main(int argc, char *argv[])
 static bool createConnections()
 {
     const int MAJOR_REV = 0;
-    const int MINOR_REV = 2;
+    const int MINOR_REV = 3;
 
     QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
     db.setDatabaseName(QString(qgetenv("HOME")) + "/obx_explorer.db");
