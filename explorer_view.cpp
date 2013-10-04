@@ -908,21 +908,27 @@ bool ExplorerView::openDocument(const QString &fullFileName)
         query.bindValue(":file", fullFileName);
         query.exec();
         
-        if (query.next())
+        if (!query.next())
         {
-            book_cover_ = query.value(0).toString();
-
-            query.exec(QString("UPDATE books SET read_date = '%1', read_count = %2 WHERE id = %3")
-                              .arg(QDateTime::currentDateTime().toString(Qt::ISODate))
-                              .arg(query.value(1).toInt() + 1)
-                              .arg(query.value(2).toInt()));
-        } else { 
 			//no such book entry in database; let's scan it.
 			BookScanner adhoc_scanner(book_extensions_);
 			adhoc_scanner.scan(fullFileName);
 		}
+		
+		
+		//refresh query
+		//now the book should be in db
+		query.exec();
+		
+		//not sure what is that variable used for
+		//book_cover_ = query.value(0).toString();
+		
+		query.exec(QString("UPDATE books SET read_date = '%1', read_count = %2 WHERE id = %3")
+                              .arg(QDateTime::currentDateTime().toString(Qt::ISODate))
+                              .arg(query.value(1).toInt() + 1)
+                              .arg(query.value(2).toInt()));
 
-        qDebug() << "view:" << fullFileName;
+
         run(viewer, QStringList() << fullFileName);
 
         return true;
@@ -1775,15 +1781,11 @@ void ExplorerView::popupMenu()
 				QSqlQuery loopquery(QString("SELECT file FROM books"));
 				while (loopquery.next())
 				{
-					//qDebug() << " checking : " << loopquery.value(0).toString();
 					QFile bookfile(loopquery.value(0).toString());
 					if (!bookfile.exists()) {
-						//qDebug() << "will delete entry for " << loopquery.value(0).toString();
 						QSqlQuery delquery(QString("DELETE FROM books where file='%1'").arg(loopquery.value(0).toString()));
-						//qDebug() << delquery.lastError();
 					}
 				}
-				//vacuum db; provides significant size reduction when many books have been deleted
 				QSqlQuery cleanupquery(QString("vacuum"));
 			}
 			break;
