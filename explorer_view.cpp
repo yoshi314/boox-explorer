@@ -73,7 +73,8 @@ enum
     SET_PWR_MGMT,
     SET_CALIBRATE,
     SET_DEFAULTS,
-    SET_ABOUT
+    SET_ABOUT, 
+    SET_RESUME_LAST
 };
 
 ExplorerView::ExplorerView(bool mainUI, QWidget *parent)
@@ -918,7 +919,7 @@ bool ExplorerView::openDocument(const QString &fullFileName)
         query.prepare("SELECT cover, read_count, id FROM books WHERE file = :file");
         query.bindValue(":file", fullFileName);
         query.exec();
-
+        
         if (query.next())
         {
             book_cover_ = query.value(0).toString();
@@ -927,7 +928,12 @@ bool ExplorerView::openDocument(const QString &fullFileName)
                               .arg(QDateTime::currentDateTime().toString(Qt::ISODate))
                               .arg(query.value(1).toInt() + 1)
                               .arg(query.value(2).toInt()));
-        }
+        } else { 
+			//no such book entry in database; let's scan it.
+			BookScanner adhoc_scanner(book_extensions_);
+			adhoc_scanner.scan(fullFileName);
+			delete adhoc_scanner;
+		}
 
         qDebug() << "view:" << fullFileName;
         run(viewer, QStringList() << fullFileName);
@@ -1450,6 +1456,7 @@ void ExplorerView::popupMenu()
         settingsActions_.addAction(QIcon(":/images/time_zone.png"), tr("Time Zone"), SET_TZ);
         settingsActions_.addAction(QIcon(":/images/power_management.png"), tr("Power Management"), SET_PWR_MGMT);
         settingsActions_.addAction(QIcon(":/images/screen_calibration.png"), tr("Screen Calibration"), SET_CALIBRATE);
+        settingsActions_.addAction(QIcon(":/images/startup.png"),tr("Open last read book by default"), SET_RESUME_LAST);
     }
     settingsActions_.addAction(QIcon(":/images/restore.png"), tr("Default Categories"), SET_DEFAULTS);
     settingsActions_.addAction(QIcon(":/images/about.png"), tr("About"), SET_ABOUT);
@@ -1870,6 +1877,7 @@ void ExplorerView::popupMenu()
         }
         else if (group == associateActions_.category())
         {
+			//reader selection
             QString extension = extensions.at(associateActions_.selected());
             QStringList viewerIds, viewers;
             QSqlQuery query;
@@ -1962,6 +1970,10 @@ void ExplorerView::popupMenu()
                 aboutDialog.exec();
                 break;
             }
+//            case SET_RESUME_LAST:
+//            {
+//
+// 			  }
             default:
                 break;
             }
