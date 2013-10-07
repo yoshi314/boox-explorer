@@ -82,6 +82,7 @@ static bool createConnections()
             << "CREATE TABLE views (id INTEGER PRIMARY KEY, position NUMERIC, visible NUMERIC, name TEXT, handler_id NUMERIC, handler_data TEXT, icon TEXT)"
             << "CREATE TABLE applications (id INTEGER PRIMARY KEY, name TEXT, executable TEXT, options TEXT, icon TEXT, category_id NUMERIC)"
             << "CREATE TABLE websites (id INTEGER PRIMARY KEY, name TEXT, url TEXT, icon TEXT)"   
+            << "CREATE TABLE settings (name TEXT PRIMARY KEY, value TEXT, comment TEXT) "
             /* indexes */
             << "CREATE INDEX books_i_file ON books ( file ) "
             << "CREATE INDEX books_i_rcount ON books ( read_count ) "
@@ -92,8 +93,7 @@ static bool createConnections()
             << "CREATE INDEX books_i_series_idx ON books ( series_index )"
             << "CREATE INDEX books_i_rdate ON books ( read_date )"
             << "CREATE INDEX books_i_adate ON books ( add_date )"
-            << "CREATE INDEX applications_i_hid ON applications ( category_id )"
-            ;
+            << "CREATE INDEX applications_i_hid ON applications ( category_id )";
 
         if (DatabaseUtils::execQueries(queries) != queries.size())
         {

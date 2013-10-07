@@ -160,6 +160,25 @@ ExplorerView::ExplorerView(bool mainUI, QWidget *parent)
     onyx::screen::instance().enableUpdate(true);
 
     showHome(0);
+
+    //try opening last read book, if such exists
+    //untested
+
+    if (mainUI) {  //only do this if running as main manager on device
+		query.exec("select count(*) from settings where name='loadlast' and value='Y'");
+		if (query.next() && query.value(0).toInt() == 1)
+		{
+			//look for last opened book
+			query.exec("select file from books order by read_date desc limit 1");
+			if (query.next()) {
+				//if entry exists; check if file exists, then attempt to open
+				QFile book(query.value(0).toString());
+				if (book.exists()) 
+					if (!openDocument(query.value(0).toString())) 
+						qDebug() << "failed to open last read book; file might not exist";
+			}
+		}
+	}
 }
 
 ExplorerView::~ExplorerView()
@@ -1966,10 +1985,27 @@ void ExplorerView::popupMenu()
                 aboutDialog.exec();
                 break;
             }
-//            case SET_RESUME_LAST:
-//            {
-//
-// 			  }
+            case SET_RESUME_LAST:
+            {
+				MessageDialog resume(QMessageBox::Icon(QMessageBox::Icon(QMessageBox::Question)), 
+					tr("Auto open last book"),
+					tr("Do you want to reopen last read book automatically on startup?"),
+					QMessageBox::Yes | QMessageBox::No);
+
+				if (resume.exec() == QMessageBox::Yes)
+				{
+					//enable feature
+					QSqlQuery lastQuery("update settings set value='Y' where name='loadlast'");
+					if (lastQuery.numRowsAffected()>0)
+						qDebug() << "enabled auto opening of last read book";
+				} else
+				{
+					//disable feature
+					QSqlQuery lastQuery("update settings set value='N' where name='loadlast'");
+					if (lastQuery.numRowsAffected()>0)
+						qDebug() << "disnabled auto opening of last read book";
+				}
+			}
             default:
                 break;
             }

@@ -226,7 +226,9 @@ bool initializeDatabase()
         << "INSERT INTO applications VALUES(17,'RSS Reader','/opt/onyx/arm/bin/rss_reader',NULL,NULL,NULL)"
 
         << "INSERT INTO websites VALUES(1,'Google','http://www.google.com','/usr/share/explorer/images/middle/google.png')"
-        << "INSERT INTO websites VALUES(2,'Wikipedia','http://en.wikipedia.org','/usr/share/explorer/images/middle/wiki.png')";
+        << "INSERT INTO websites VALUES(2,'Wikipedia','http://en.wikipedia.org','/usr/share/explorer/images/middle/wiki.png')"
+
+        << "INSERT INTO settings VALUES('loadlast','N','Y/N - open last read book on startup?')" ;
 
     return (DatabaseUtils::execQueries(queries) == queries.size());
 }
