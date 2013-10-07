@@ -159,11 +159,10 @@ ExplorerView::ExplorerView(bool mainUI, QWidget *parent)
     sys::SysStatus::instance().setSystemBusy(false);
     onyx::screen::instance().enableUpdate(true);
 
-    showHome(0);
-
     //try opening last read book, if such exists
     //untested
-
+    showHome(0);
+    
     if (mainUI) {  //only do this if running as main manager on device
 		query.exec("select count(*) from settings where name='loadlast' and value='Y'");
 		if (query.next() && query.value(0).toInt() == 1)
@@ -179,6 +178,7 @@ ExplorerView::ExplorerView(bool mainUI, QWidget *parent)
 			}
 		}
 	}
+
 }
 
 ExplorerView::~ExplorerView()
@@ -370,7 +370,7 @@ void ExplorerView::showDBViews(int category, const QString &path, int row, const
 
 
 						tooltip += QString(" | Book " 
-						+ query.value(seriesIdxCol).toString().insert(position-2, ".")
+						+ query.value(seriesIdxCol).toString().insert(position-1, ".")
 						+ " of " 
 						+ query.value(seriesCol).toString());
 					}
@@ -944,18 +944,23 @@ bool ExplorerView::openDocument(const QString &fullFileName)
 		
 		//refresh query
 		//now the book should be in db
+        query.prepare("SELECT cover, read_count, id FROM books WHERE file = :file");
+        query.bindValue(":file", fullFileName);
 		query.exec();
 		
 		//not sure what is that variable used for
 		//book_cover_ = query.value(0).toString();
 		
-		query.exec(QString("UPDATE books SET read_date = '%1', read_count = %2 WHERE id = %3")
+		if (query.next()) {
+			query.exec(QString("UPDATE books SET read_date = '%1', read_count = %2 WHERE id = %3")
                               .arg(QDateTime::currentDateTime().toString(Qt::ISODate))
                               .arg(query.value(1).toInt() + 1)
                               .arg(query.value(2).toInt()));
+		}
+		
+		//run viewer anyway
+		run(viewer, QStringList() << fullFileName);
 
-
-        run(viewer, QStringList() << fullFileName);
 
         return true;
     }
@@ -1475,7 +1480,7 @@ void ExplorerView::popupMenu()
         settingsActions_.addAction(QIcon(":/images/time_zone.png"), tr("Time Zone"), SET_TZ);
         settingsActions_.addAction(QIcon(":/images/power_management.png"), tr("Power Management"), SET_PWR_MGMT);
         settingsActions_.addAction(QIcon(":/images/screen_calibration.png"), tr("Screen Calibration"), SET_CALIBRATE);
-        settingsActions_.addAction(QIcon(":/images/startup.png"),tr("Open last read book by default"), SET_RESUME_LAST);
+        settingsActions_.addAction(QIcon(":/images/restore.png"),tr("Open last read book by default"), SET_RESUME_LAST);
     }
     settingsActions_.addAction(QIcon(":/images/restore.png"), tr("Default Categories"), SET_DEFAULTS);
     settingsActions_.addAction(QIcon(":/images/about.png"), tr("About"), SET_ABOUT);
@@ -1993,18 +1998,9 @@ void ExplorerView::popupMenu()
 					QMessageBox::Yes | QMessageBox::No);
 
 				if (resume.exec() == QMessageBox::Yes)
-				{
-					//enable feature
 					QSqlQuery lastQuery("update settings set value='Y' where name='loadlast'");
-					if (lastQuery.numRowsAffected()>0)
-						qDebug() << "enabled auto opening of last read book";
-				} else
-				{
-					//disable feature
+				else
 					QSqlQuery lastQuery("update settings set value='N' where name='loadlast'");
-					if (lastQuery.numRowsAffected()>0)
-						qDebug() << "disnabled auto opening of last read book";
-				}
 			}
             default:
                 break;
