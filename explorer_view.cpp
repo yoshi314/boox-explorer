@@ -342,12 +342,19 @@ void ExplorerView::showDBViews(int category, const QString &path, int row, const
 				if (seriesIdxCol > 0) {
 					//make sure values are not empty; otherwise no point printing them
 					if (!query.value(seriesIdxCol).toString().trimmed().isEmpty() && 
-						!query.value(seriesCol).toString().trimmed().isEmpty())
-											
+						!query.value(seriesCol).toString().trimmed().isEmpty()) {
+
+						//calibre allows dots in book numbering, e.g book 1.2, 1.3, 1.4 etc.
+						//default import format strips the dots to preserve int storage on sqlite
+						//now, they are restored into place
+						int position = query.value(seriesIdxCol).toString().size();
+
+
 						tooltip += QString(" | Book " 
-						+ query.value(seriesIdxCol).toString()
+						+ query.value(seriesIdxCol).toString().insert(position-2, ".")
 						+ " of " 
 						+ query.value(seriesCol).toString());
+					}
 						
 				} else {  //if we only have series column
 					if (!query.value(seriesCol).toString().trimmed().isEmpty())

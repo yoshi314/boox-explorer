@@ -105,25 +105,32 @@ void ObxExplorer::onMusicPlayerStateChanged(int state)
 
 void ObxExplorer::onWpaConnectionChanged(WifiProfile, WpaConnection::ConnectionState state)
 {
+    qDebug() << "WpaConnectionChanged" ;
     static bool wpaIdle = true;
 
     switch (state)
     {
     case WpaConnection::STATE_SCANNING:
+		qDebug() << "WpaConnectionChanged : STATE_SCANNING" ;
         if (wpaIdle)
         {
+			qDebug() << "WpaConnectionChanged : wpaIdle" ;
             wpaIdle = false;
             sys::SysStatus::instance().enableIdle(false);   // Keep the wifi hardware active
         }
         break;
     case WpaConnection::STATE_COMPLETE:
+		qDebug() << "WpaConnectionChanged : STATE_COMPLETE" ;
         system("/etc/rc.d/init.d/ntp start > /dev/null");
         break;
     case WpaConnection::STATE_ACQUIRING_ADDRESS_ERROR:
+		qDebug() << "WpaConnectionChanged : STATE_ACQUIRING_ADDRESS_ERROR" ;
     case WpaConnection::STATE_DISCONNECTED:
+		qDebug() << "WpaConnectionChanged : STATE_DISCONNECTED" ;
         system("/etc/rc.d/init.d/ntp stop > /dev/null");
         if (!wpaIdle)
         {
+			qDebug() << "WpaConnectionChanged : wpaIdle" ;
             wpaIdle = true;
             sys::SysStatus::instance().enableIdle(true);
         }
@@ -131,6 +138,7 @@ void ObxExplorer::onWpaConnectionChanged(WifiProfile, WpaConnection::ConnectionS
         // Switch off Wifi
         if (SysStatus::instance().sdioState())
         {
+			qDebug() << "WpaConnectionChanged : switching off wifi" ;
             SysStatus::instance().enableSdio(false);
         }
         break;
