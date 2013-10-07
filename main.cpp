@@ -39,7 +39,7 @@ int main(int argc, char *argv[])
 static bool createConnections()
 {
     const int MAJOR_REV = 0;
-    const int MINOR_REV = 3;
+    const int MINOR_REV = 4;
 
     QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
     db.setDatabaseName(QString(qgetenv("HOME")) + "/obx_explorer.db");
@@ -93,7 +93,8 @@ static bool createConnections()
             << "CREATE INDEX books_i_series_idx ON books ( series_index )"
             << "CREATE INDEX books_i_rdate ON books ( read_date )"
             << "CREATE INDEX books_i_adate ON books ( add_date )"
-            << "CREATE INDEX applications_i_hid ON applications ( category_id )";
+            << "CREATE INDEX applications_i_hid ON applications ( category_id )"
+            << "CREATE INDEX settings_i_name ON settings (name)" ;
 
         if (DatabaseUtils::execQueries(queries) != queries.size())
         {

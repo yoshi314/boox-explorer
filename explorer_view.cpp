@@ -1892,7 +1892,7 @@ void ExplorerView::popupMenu()
         }
         else if (group == associateActions_.category())
         {
-			//reader selection
+	//reader selection
             QString extension = extensions.at(associateActions_.selected());
             QStringList viewerIds, viewers;
             QSqlQuery query;
