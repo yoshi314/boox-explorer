@@ -1,3 +1,5 @@
+/* vim: set sw=4 sts=4 et foldmethod=syntax : */
+
 /*  Copyright (C) 2011-2012 OpenBOOX
  *
  *  This program is free software; you can redistribute it and/or
@@ -69,14 +71,14 @@ static bool createConnections()
         qDebug() << "initializing database...";
 
         const QStringList queries = QStringList()
-			/* structures */
+            /* structures */
             << "CREATE TABLE revision (id INTEGER PRIMARY KEY, major NUMERIC, minor NUMERIC)"
             << QString("INSERT INTO revision VALUES(1, %1, %2)").arg(MAJOR_REV).arg(MINOR_REV)
-            
+
             << "CREATE TABLE books (id INTEGER PRIMARY KEY, file TEXT, title TEXT, author TEXT, publisher TEXT, "
-               "year TEXT, series TEXT, series_index NUMERIC, add_date TEXT, read_date TEXT, read_count NUMERIC, cover TEXT)"
+            "year TEXT, series TEXT, series_index NUMERIC, add_date TEXT, read_date TEXT, read_count NUMERIC, cover TEXT)"
             << "CREATE TABLE music (id INTEGER PRIMARY KEY, file TEXT, title TEXT, artist TEXT, album TEXT, "
-               "album_artist TEXT, track NUMERIC, genre TEXT, year TEXT, add_date TEXT, play_date TEXT, play_count NUMERIC)"
+            "album_artist TEXT, track NUMERIC, genre TEXT, year TEXT, add_date TEXT, play_date TEXT, play_count NUMERIC)"
             << "CREATE TABLE categories (id INTEGER PRIMARY KEY, position NUMERIC, visible NUMERIC, name TEXT, handler_id NUMERIC, handler_data TEXT, icon TEXT)"
             << "CREATE TABLE associations (id INTEGER PRIMARY KEY, extension TEXT, viewer NUMERIC, viewers TEXT, editor TEXT, icon TEXT, handler_id NUMERIC)"
             << "CREATE TABLE views (id INTEGER PRIMARY KEY, position NUMERIC, visible NUMERIC, name TEXT, handler_id NUMERIC, handler_data TEXT, icon TEXT)"
