@@ -1,3 +1,5 @@
+/* vim: set sw=4 sts=4 et foldmethod=syntax : */
+
 /*  Copyright (C) 2011-2012 OpenBOOX
  *
  *  This program is free software; you can redistribute it and/or
@@ -29,339 +31,339 @@
 namespace obx
 {
 
-MetadataReader::MetadataReader(const QString &fileName)
-{
-    fileInfo_ = QFileInfo(fileName);
-    title_ = QString();
-    author_ = QStringList();
-    publisher_ = QString();
-    year_ = QString();
-
-    calibre_series_ = QString();
-    calibre_series_index_ = 0;
-//    qDebug() << "MetadataReader instantiated : for " << fileName ;
-}
-
-MetadataReader::~MetadataReader()
-{
-}
-
-void MetadataReader::collect()
-{
-//	qDebug() << "MetadataReader::collect() " ;
-    typedef enum { NS_NONE = -1, NS_DC, NS_XMP, NS_XAP } NamespaceType;
-    typedef enum { DC_NONE = -1, DC_CREATOR, DC_DATE, DC_PUBLISHER, DC_TITLE, DC_META } DcPropertyType;
-    typedef enum { XMP_NONE = -1, XMP_CREATEDATE } XmpPropertyType;
-
-    const QStringList namespaces = QStringList() << "dc" << "xmp" << "xap";
-    const QStringList dcProperties = QStringList() << "creator" << "date" << "publisher" << "title" << "meta";
-    const QStringList xmpProperties = QStringList() << "CreateDate";
-
-    QStringList extensions = FileSystemUtils::suffixList(fileInfo_);
-    QString xmlStream;
-
-    for (int i = 0; i < extensions.size(); i++)
+    MetadataReader::MetadataReader(const QString &fileName)
     {
-        QFile opfFile(fileInfo_.absoluteFilePath().replace(extensions.at(i), "opf"));
-        if (opfFile.open(QIODevice::ReadOnly))
+        fileInfo_ = QFileInfo(fileName);
+        title_ = QString();
+        author_ = QStringList();
+        publisher_ = QString();
+        year_ = QString();
+
+        calibre_series_ = QString();
+        calibre_series_index_ = 0;
+        //    qDebug() << "MetadataReader instantiated : for " << fileName ;
+    }
+
+    MetadataReader::~MetadataReader()
+    {
+    }
+
+    void MetadataReader::collect()
+    {
+        //	qDebug() << "MetadataReader::collect() " ;
+        typedef enum { NS_NONE = -1, NS_DC, NS_XMP, NS_XAP } NamespaceType;
+        typedef enum { DC_NONE = -1, DC_CREATOR, DC_DATE, DC_PUBLISHER, DC_TITLE, DC_META } DcPropertyType;
+        typedef enum { XMP_NONE = -1, XMP_CREATEDATE } XmpPropertyType;
+
+        const QStringList namespaces = QStringList() << "dc" << "xmp" << "xap";
+        const QStringList dcProperties = QStringList() << "creator" << "date" << "publisher" << "title" << "meta";
+        const QStringList xmpProperties = QStringList() << "CreateDate";
+
+        QStringList extensions = FileSystemUtils::suffixList(fileInfo_);
+        QString xmlStream;
+
+        for (int i = 0; i < extensions.size(); i++)
         {
-            xmlStream = QString(opfFile.readAll());
-            opfFile.close();
-            break;
+            QFile opfFile(fileInfo_.absoluteFilePath().replace(extensions.at(i), "opf"));
+            if (opfFile.open(QIODevice::ReadOnly))
+            {
+                xmlStream = QString(opfFile.readAll());
+                opfFile.close();
+                break;
+            }
+        }
+
+        if (xmlStream.isEmpty())
+        {
+            if (fileInfo_.suffix() == "epub")
+            {
+                QuaZip archive(fileInfo_.absoluteFilePath());
+                if (archive.open(QuaZip::mdUnzip))
+                {
+                    while (archive.goToNextFile())
+                    {
+                        QString fileName = archive.getCurrentFileName();
+                        if (fileName.endsWith(".opf"))
+                        {
+                            //                        qDebug() << fileName;
+                            QuaZipFile zippedOpfFile(fileInfo_.absoluteFilePath(), fileName);
+                            zippedOpfFile.open(QIODevice::ReadOnly);
+                            xmlStream = QString(zippedOpfFile.readAll());
+                            zippedOpfFile.close();
+                            break;
+                        }
+                    }
+                    archive.close();
+                }
+            }
+            else if (fileInfo_.suffix() == "pdf")
+            {
+                Poppler::Document *document = Poppler::Document::load(fileInfo_.absoluteFilePath());
+
+                if (document && !document->isLocked())
+                {
+                    xmlStream = document->metadata();
+                }
+
+                delete document;
+            }
+        }
+
+        if (!xmlStream.isEmpty())
+        {
+            QXmlStreamReader::TokenType token;
+            NamespaceType namespaceId = NS_NONE;
+            DcPropertyType dcPropertyId = DC_NONE;
+            XmpPropertyType xmpPropertyId = XMP_NONE;
+
+            QXmlStreamReader xmlReader(xmlStream);
+
+            while((token = xmlReader.readNext()) != QXmlStreamReader::Invalid)
+            {
+                switch (token)
+                {
+                    case QXmlStreamReader::StartElement:
+                        {
+                            QXmlStreamNamespaceDeclarations declarations = xmlReader.namespaceDeclarations();
+                            for (int i = 0; i < declarations.size(); i++)
+                            {
+                                if (!declarations[i].prefix().isEmpty())
+                                {
+                                    namespaceId = NamespaceType(namespaces.indexOf(declarations[i].prefix().toString()));
+                                    qDebug() << "namespace:" << declarations[i].prefix() << declarations[i].namespaceUri();
+                                    if (namespaceId != NS_NONE)
+                                    {
+                                        break;
+                                    }
+                                }
+                            }
+
+                            switch (namespaceId)
+                            {
+                                case NS_DC:
+                                    {
+                                        DcPropertyType startDcPropertyId = DcPropertyType(dcProperties.indexOf(xmlReader.name().toString()));
+                                        if (dcPropertyId == DC_NONE)
+                                        {
+                                            dcPropertyId = startDcPropertyId;
+                                        }
+                                        if (dcPropertyId == DC_META)
+                                        {
+                                            calibreCollect(xmlReader.attributes());
+                                        }
+                                        break;
+                                    }
+                                case NS_XMP:
+                                case NS_XAP:
+                                    {
+                                        XmpPropertyType startXmpPropertyId = XmpPropertyType(xmpProperties.indexOf(xmlReader.name().toString()));
+                                        if (xmpPropertyId == XMP_NONE)
+                                        {
+                                            xmpPropertyId = startXmpPropertyId;
+                                        }
+                                        break;
+                                    }
+                                default:
+                                    break;
+                            }
+                            break;
+                        }
+                    case QXmlStreamReader::EndElement:
+                        switch (namespaceId)
+                        {
+                            case NS_DC:
+                                {
+                                    DcPropertyType endDcPropertyId = DcPropertyType(dcProperties.indexOf(xmlReader.name().toString()));
+                                    if (endDcPropertyId == dcPropertyId)
+                                    {
+                                        dcPropertyId = DC_NONE;
+                                    }
+                                    break;
+                                }
+                            case NS_XMP:
+                            case NS_XAP:
+                                {
+                                    XmpPropertyType endXmpPropertyId = XmpPropertyType(xmpProperties.indexOf(xmlReader.name().toString()));
+                                    if (endXmpPropertyId == xmpPropertyId)
+                                    {
+                                        xmpPropertyId = XMP_NONE;
+                                    }
+                                    break;
+                                }
+                            default:
+                                break;
+                        }
+                        break;
+                    case QXmlStreamReader::Characters:
+                        if (!xmlReader.isWhitespace())
+                        {
+                            QString value = xmlReader.text().toString();
+                            switch (namespaceId)
+                            {
+                                case NS_DC:
+                                    switch(dcPropertyId)
+                                    {
+                                        case DC_CREATOR:
+                                            author_ << value;
+                                            //                            qDebug() << "creator:" << value;
+                                            break;
+                                        case DC_DATE:
+                                            {
+                                                QString yearString = value.section('-', 0, 0);
+                                                if (yearString.size() == 4)
+                                                {
+                                                    year_ = yearString;
+                                                }
+                                                //                            qDebug() << "date:" << value;
+                                                break;
+                                            }
+                                        case DC_PUBLISHER:
+                                            publisher_ = value;
+                                            //                            qDebug() << "publisher:" << value;
+                                            break;
+                                        case DC_TITLE:
+                                            title_ = value;
+                                            //                            qDebug() << "title:" << value;
+                                        default:
+                                            break;
+                                    }
+                                    break;
+                                case NS_XMP:
+                                case NS_XAP:
+                                    switch(xmpPropertyId)
+                                    {
+                                        case XMP_CREATEDATE:
+                                            {
+                                                QString yearString = value.section('-', 0, 0);
+                                                if (year_ == 0 && yearString.size() == 4)
+                                                {
+                                                    year_ = yearString;
+                                                }
+                                                //                            qDebug() << "CreateDate:" << value;
+                                                break;
+                                            }
+                                        default:
+                                            break;
+                                    }
+                                    break;
+                                default:
+                                    break;
+                            }
+                        }
+                        break;
+                    case QXmlStreamReader::StartDocument:
+                    case QXmlStreamReader::EndDocument:
+                    case QXmlStreamReader::Comment:
+                    case QXmlStreamReader::DTD:
+                    case QXmlStreamReader::EntityReference:
+                    case QXmlStreamReader::ProcessingInstruction:
+                    default:
+                        break;
+                }
+            }
+        }
+
+        if (title_.isEmpty())
+        {
+            title_ = fileInfo_.baseName();
         }
     }
 
-    if (xmlStream.isEmpty())
+    QString MetadataReader::fileName()
     {
-        if (fileInfo_.suffix() == "epub")
-        {
-            QuaZip archive(fileInfo_.absoluteFilePath());
-            if (archive.open(QuaZip::mdUnzip))
-            {
-                while (archive.goToNextFile())
-                {
-                    QString fileName = archive.getCurrentFileName();
-                    if (fileName.endsWith(".opf"))
-                    {
-//                        qDebug() << fileName;
-                        QuaZipFile zippedOpfFile(fileInfo_.absoluteFilePath(), fileName);
-                        zippedOpfFile.open(QIODevice::ReadOnly);
-                        xmlStream = QString(zippedOpfFile.readAll());
-                        zippedOpfFile.close();
-                        break;
-                    }
-                }
-                archive.close();
-            }
-        }
-        else if (fileInfo_.suffix() == "pdf")
-        {
-            Poppler::Document *document = Poppler::Document::load(fileInfo_.absoluteFilePath());
-
-            if (document && !document->isLocked())
-            {
-                xmlStream = document->metadata();
-            }
-
-            delete document;
-        }
+        return fileInfo_.fileName();
     }
 
-    if (!xmlStream.isEmpty())
+    QString MetadataReader::title()
     {
-        QXmlStreamReader::TokenType token;
-        NamespaceType namespaceId = NS_NONE;
-        DcPropertyType dcPropertyId = DC_NONE;
-        XmpPropertyType xmpPropertyId = XMP_NONE;
-
-        QXmlStreamReader xmlReader(xmlStream);
-
-        while((token = xmlReader.readNext()) != QXmlStreamReader::Invalid)
+        if (!title_.isEmpty())
         {
-            switch (token)
-            {
-            case QXmlStreamReader::StartElement:
-            {
-                QXmlStreamNamespaceDeclarations declarations = xmlReader.namespaceDeclarations();
-                for (int i = 0; i < declarations.size(); i++)
-                {
-                    if (!declarations[i].prefix().isEmpty())
-                    {
-                        namespaceId = NamespaceType(namespaces.indexOf(declarations[i].prefix().toString()));
-                        qDebug() << "namespace:" << declarations[i].prefix() << declarations[i].namespaceUri();
-                        if (namespaceId != NS_NONE)
-                        {
-                            break;
-                        }
-                    }
-                }
+            return title_;
+        }
 
-                switch (namespaceId)
-                {
-                case NS_DC:
-                {
-                    DcPropertyType startDcPropertyId = DcPropertyType(dcProperties.indexOf(xmlReader.name().toString()));
-                    if (dcPropertyId == DC_NONE)
-                    {
-                        dcPropertyId = startDcPropertyId;
-                    }
-                    if (dcPropertyId == DC_META)
-                    {
-                        calibreCollect(xmlReader.attributes());
-                    }
-                    break;
-                }
-                case NS_XMP:
-                case NS_XAP:
-                {
-                    XmpPropertyType startXmpPropertyId = XmpPropertyType(xmpProperties.indexOf(xmlReader.name().toString()));
-                    if (xmpPropertyId == XMP_NONE)
-                    {
-                        xmpPropertyId = startXmpPropertyId;
-                    }
-                    break;
-                }
-                default:
-                    break;
-                }
-                break;
+        return "Unknown";
+    }
+
+    QStringList MetadataReader::author()
+    {
+        if (author_.size())
+        {
+            return author_;
+        }
+
+        return QStringList() << "Unknown";
+    }
+
+    QString MetadataReader::publisher()
+    {
+        if (!publisher_.isEmpty())
+        {
+            return publisher_;
+        }
+
+        return "Unknown";
+    }
+
+    QString MetadataReader::year()
+    {
+        if (!year_.isEmpty())
+        {
+            return year_;
+        }
+
+        return "Unknown";
+    }
+
+    QString MetadataReader::calibreSeries()
+    {
+        return calibre_series_;
+    }
+
+    int MetadataReader::calibreSeriesIndex()
+    {
+        return calibre_series_index_;
+    }
+
+    void MetadataReader::calibreCollect(QXmlStreamAttributes attributes)
+    {
+        typedef enum { CLB_NONE = -1, CLB_SERIES, CLB_SERIES_INDEX } ClbPropertyType;
+        const QStringList clbProperties = QStringList() << "calibre:series" << "calibre:series_index";
+        QString contentString;
+        for (int i = 0; i < attributes.size(); i++)
+        {
+            qDebug() << "attrname " << i << " " << attributes[i].name() << " " << attributes[i].value().toString();
+            if (attributes[i].name() == "content")
+            {
+                contentString = attributes[i].value().toString();
             }
-            case QXmlStreamReader::EndElement:
-                switch (namespaceId)
+            else if (attributes[i].name() == "name")
+            {
+                ClbPropertyType clbPropertyId = ClbPropertyType(clbProperties.indexOf(attributes[i].value().toString()));
+
+                //parameters in calibre are often reversed (value, name)
+                //which made this checks come up empty
+
+                //there is an assumption that they go in pairs of 0 and 1. 
+                //might crash if something is changed in calibre metadata someday
+
+                switch (clbPropertyId)
                 {
-                case NS_DC:
-                {
-                    DcPropertyType endDcPropertyId = DcPropertyType(dcProperties.indexOf(xmlReader.name().toString()));
-                    if (endDcPropertyId == dcPropertyId)
-                    {
-                        dcPropertyId = DC_NONE;
-                    }
-                    break;
-                }
-                case NS_XMP:
-                case NS_XAP:
-                {
-                    XmpPropertyType endXmpPropertyId = XmpPropertyType(xmpProperties.indexOf(xmlReader.name().toString()));
-                    if (endXmpPropertyId == xmpPropertyId)
-                    {
-                        xmpPropertyId = XMP_NONE;
-                    }
-                    break;
-                }
-                default:
-                    break;
-                }
-                break;
-            case QXmlStreamReader::Characters:
-                if (!xmlReader.isWhitespace())
-                {
-                    QString value = xmlReader.text().toString();
-                    switch (namespaceId)
-                    {
-                    case NS_DC:
-                        switch(dcPropertyId)
-                        {
-                        case DC_CREATOR:
-                            author_ << value;
-//                            qDebug() << "creator:" << value;
-                            break;
-                        case DC_DATE:
-                        {
-                            QString yearString = value.section('-', 0, 0);
-                            if (yearString.size() == 4)
-                            {
-                                year_ = yearString;
-                            }
-//                            qDebug() << "date:" << value;
-                            break;
-                        }
-                        case DC_PUBLISHER:
-                            publisher_ = value;
-//                            qDebug() << "publisher:" << value;
-                            break;
-                        case DC_TITLE:
-                            title_ = value;
-//                            qDebug() << "title:" << value;
-                        default:
-                            break;
-                        }
+                    case CLB_SERIES:
+                        //qDebug() << "attrname " << 1-i << " " << attributes[1-i].name() << " " << attributes[1-i].value().toString();
+                        calibre_series_ = attributes[1-i].value().toString();
+                        //qDebug() << " got series as " << calibre_series_;
                         break;
-                    case NS_XMP:
-                    case NS_XAP:
-                        switch(xmpPropertyId)
-                        {
-                        case XMP_CREATEDATE:
-                        {
-                            QString yearString = value.section('-', 0, 0);
-                            if (year_ == 0 && yearString.size() == 4)
-                            {
-                                year_ = yearString;
-                            }
-//                            qDebug() << "CreateDate:" << value;
-                            break;
-                        }
-                        default:
-                            break;
-                        }
+                    case CLB_SERIES_INDEX:
+                        qDebug() << "attrname " << 1-i << " " << attributes[1-i].name() << " " << attributes[1-i].value().toString();
+                        calibre_series_index_ = 
+                            attributes[1-i].value().toString().remove(QChar('.'), Qt::CaseInsensitive).toInt();
+                        //qDebug() << " got index as " << calibre_series_index_;
                         break;
                     default:
                         break;
-                    }
                 }
-                break;
-            case QXmlStreamReader::StartDocument:
-            case QXmlStreamReader::EndDocument:
-            case QXmlStreamReader::Comment:
-            case QXmlStreamReader::DTD:
-            case QXmlStreamReader::EntityReference:
-            case QXmlStreamReader::ProcessingInstruction:
-            default:
-                break;
             }
         }
     }
-
-    if (title_.isEmpty())
-    {
-        title_ = fileInfo_.baseName();
-    }
-}
-
-QString MetadataReader::fileName()
-{
-    return fileInfo_.fileName();
-}
-
-QString MetadataReader::title()
-{
-    if (!title_.isEmpty())
-    {
-        return title_;
-    }
-
-    return "Unknown";
-}
-
-QStringList MetadataReader::author()
-{
-    if (author_.size())
-    {
-        return author_;
-    }
-
-    return QStringList() << "Unknown";
-}
-
-QString MetadataReader::publisher()
-{
-    if (!publisher_.isEmpty())
-    {
-        return publisher_;
-    }
-
-    return "Unknown";
-}
-
-QString MetadataReader::year()
-{
-    if (!year_.isEmpty())
-    {
-        return year_;
-    }
-
-    return "Unknown";
-}
-
-QString MetadataReader::calibreSeries()
-{
-    return calibre_series_;
-}
-
-int MetadataReader::calibreSeriesIndex()
-{
-    return calibre_series_index_;
-}
-
-void MetadataReader::calibreCollect(QXmlStreamAttributes attributes)
-{
-    typedef enum { CLB_NONE = -1, CLB_SERIES, CLB_SERIES_INDEX } ClbPropertyType;
-    const QStringList clbProperties = QStringList() << "calibre:series" << "calibre:series_index";
-    QString contentString;
-    for (int i = 0; i < attributes.size(); i++)
-    {
-		qDebug() << "attrname " << i << " " << attributes[i].name() << " " << attributes[i].value().toString();
-        if (attributes[i].name() == "content")
-        {
-            contentString = attributes[i].value().toString();
-        }
-        else if (attributes[i].name() == "name")
-        {
-			ClbPropertyType clbPropertyId = ClbPropertyType(clbProperties.indexOf(attributes[i].value().toString()));
-			
-			//parameters in calibre are often reversed (value, name)
-			//which made this checks come up empty
-			
-			//there is an assumption that they go in pairs of 0 and 1. 
-			//might crash if something is changed in calibre metadata someday
-			
-            switch (clbPropertyId)
-            {
-				case CLB_SERIES:
-					//qDebug() << "attrname " << 1-i << " " << attributes[1-i].name() << " " << attributes[1-i].value().toString();
-					calibre_series_ = attributes[1-i].value().toString();
-					//qDebug() << " got series as " << calibre_series_;
-					break;
-				case CLB_SERIES_INDEX:
-					qDebug() << "attrname " << 1-i << " " << attributes[1-i].name() << " " << attributes[1-i].value().toString();
-					calibre_series_index_ = 
-						attributes[1-i].value().toString().remove(QChar('.'), Qt::CaseInsensitive).toInt();
-						//qDebug() << " got index as " << calibre_series_index_;
-					break;
-				default:
-					break;
-            }
-        }
-    }
-}
 
 }
