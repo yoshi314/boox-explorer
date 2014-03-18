@@ -940,7 +940,8 @@ namespace obx
             {
                 //no such book entry in database; let's scan it.
                 BookScanner adhoc_scanner(book_extensions_);
-                adhoc_scanner.scan(fullFileName);
+                if (!adhoc_scanner.scan(fullFileName))
+                    qDebug() << "failed to add metadata\n";
             }
 
 
