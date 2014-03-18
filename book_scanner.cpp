@@ -119,7 +119,13 @@ bool BookScanner::scanFile(const QString &fileName)
     }
 
     query.bindValue(":file", fileName);
-    query.bindValue(":title", metadata.title());
+    
+    //if no metadata, add filename as title
+    if (metadata.title().isEmpty()) 
+		query.bindValue(":title", fileName)
+	else 
+		query.bindValue(":title", metadata.title());
+		
     query.bindValue(":author", metadata.author().at(0));
     query.bindValue(":publisher", metadata.publisher());
     query.bindValue(":year", metadata.year());
