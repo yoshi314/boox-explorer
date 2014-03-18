@@ -29,6 +29,30 @@
 namespace obx
 {
 
+
+// few helper functions ; will be moved somewhere else eventually
+
+//attempt to convert sequence of bytes into integer
+unsigned int bytesToInt(char * bytes, int start, int count) {
+    unsigned char * tmpchars = (unsigned char *) bytes;
+    unsigned int value = 0;
+    for (int j=0;j<count;j++) {
+        value = (value << 8) + tmpchars[start+j];
+    }
+    return value;
+}
+
+//print hex bytes of a char *
+void printbytes(char * input, int count) {
+        unsigned char * tmpchar2 = (unsigned char*) input;
+
+        printf(" [ ");
+        for(int j = 0; j < count; j++)
+            printf(" %02x ", tmpchar2[j]);
+        printf(" ]\n");
+}
+
+
 MetadataReader::MetadataReader(const QString &fileName)
 {
     fileInfo_ = QFileInfo(fileName);
@@ -44,6 +68,269 @@ MetadataReader::MetadataReader(const QString &fileName)
 
 MetadataReader::~MetadataReader()
 {
+}
+
+bool MetadataReader::readMobiMetadata() {
+
+    /* for simplicity, keep failing at first error found */
+
+	QFile mobiFile(fileInfo_.absoluteFilePath());
+	if (!mobiFile.open(QIODevice::ReadOnly)) {
+        qDebug("failed to open file\n");
+        return false;
+	}
+
+	QDataStream mobiStream(&mobiFile);
+
+    /* file starts with pdb header,
+	 * 4bytes at 60 should be 'BOOK'
+	 * 4bytes at 64 should be 'MOBI'
+	 * if file is a valid .mobi
+	 */
+
+    if (!mobiFile.seek(60)) {
+        qDebug("seek failed\n");
+        return false;
+    }
+
+    // 8 bytes for signature
+	char * tmpchar = new  char[8];
+
+    if (mobiStream.readRawData(tmpchar,8) != 8) {
+		qDebug("failed to read 8 bytes\n");
+		return false;
+	}
+
+	//check'em
+    if (strncmp(tmpchar,"BOOKMOBI",8) != 0) {
+        qDebug ( "file does not appear to be a MobiPocket format\n");
+        return false;
+    }
+
+	/* position 76 has number of PDB records
+	 * records follow straight after
+	 * we only need to get into 1st one
+	 */
+
+    //goto pos 76
+    mobiFile.seek(76);
+
+    delete tmpchar;
+
+    tmpchar = new  char[2];
+
+    unsigned int records = 0 ;
+
+    if (mobiStream.readRawData(tmpchar,2) == 2) {
+        records = bytesToInt(tmpchar,0,2) ;   //needs a batter way to figure it out
+        qDebug ( "mobi records : %d \n", records);
+    }
+
+    qDebug("parsing record0\n");
+
+    /*
+    records start at  78 and take up 8*records bytes of data
+    http://wiki.mobileread.com/wiki/PDB#Palm_Database_Format
+    */
+
+    mobiFile.seek(78);
+
+    delete tmpchar;
+    tmpchar = new char[8];
+
+    //4b - record offset from start of file
+    //1b - record flags
+    //3b - record id
+
+
+	/* skip over all the record list, we don't really need those */
+	mobiFile.seek(mobiFile.pos() + 8*records);
+
+    /* there are 2 bytes of padding after records, skip them */
+
+	mobiFile.seek(mobiFile.pos() + 2);
+
+	//save this location as reference for later
+    qint64 header0pos = mobiFile.pos();
+
+    /* 16 byte palmdoc header starts here, read it */
+	delete tmpchar;
+
+	/* instead of parsing, we just go over it and skip to record #0 that follows */
+	mobiFile.seek(mobiFile.pos() + 16);
+
+    //go through MOBI header
+    //first let's see if we have a header, 4 bytes should be 'MOBI', 16 bytes from beginning of PalmDoc header
+
+	tmpchar = new char[4];
+
+    if ((mobiStream.readRawData(tmpchar,4) == 4) && (strncmp(tmpchar,"MOBI",4) == 0)) {
+        qDebug("got MOBI header in record 0\n");
+    } else {
+        qDebug("no MOBI header. exiting\n");
+        return false;
+    }
+
+    //next up is header length that includes that 'MOBI' signature just read.
+    unsigned int mobiHeaderSize  = 0;
+
+    if (mobiStream.readRawData(tmpchar,4) == 4) {
+        mobiHeaderSize = bytesToInt(tmpchar,0,4);
+    } else {
+        qDebug("failed to read 4 bytes\n");
+        return false;
+    }
+
+    printf("mobi header size : %d [ %0x ]\n", mobiHeaderSize, mobiHeaderSize);
+
+    printf("EXTH should start at %llx\n", mobiHeaderSize + header0pos + 0x10);
+    //saved position, 16 bytes for palmdoc header, and mobi header size
+    //and we should arrive at EXTH
+
+    //check if EXTH record exists, by inspecting flags in header
+
+    //location of EXTH flags in header;
+    if (!mobiFile.seek(header0pos + 0x80)) {
+        qDebug("failed to seek to EXTH header\n");
+        return false;
+    };
+
+    bool got_exth_header = false;
+
+    if (mobiStream.readRawData(tmpchar,4) != 4) {
+        qDebug("failed to read 4 bytes\n");
+        printbytes(tmpchar,4);
+        return false;
+    }
+
+    unsigned int exth_flags = bytesToInt(tmpchar,0,4);
+
+	//flags field should have 0x40 byte set
+	//that means that EXTH data follows the MOBI header
+    if ( exth_flags & 0x40)
+        got_exth_header = true;
+
+
+    if (!got_exth_header) {
+        qDebug("EXTH not found, exiting\n");
+        return false;
+    }
+
+    qDebug("EXTH header exists\n");
+
+    //go through EXTH header, if found (indicated in MOBI header)
+
+    //navigating to start of EXTH
+    qDebug("seeking to EXTH header\n");
+
+    //first palmdoc entry offset + 16bytes + entire mobi header is where exth starts
+    qint64 exth_pos = header0pos + mobiHeaderSize+0x10;
+
+    if (!mobiFile.seek(exth_pos)) {
+        qDebug("failed to seek to EXTH data\n");
+        return false;
+    }
+
+    printf("at position %llu [ %llx ]\n", mobiFile.pos(), mobiFile.pos());
+    /*
+    4 bytes - 'EXTH'
+    4 bytes - length of entire header, not padded
+    4 bytes - number of records
+
+    < records follow >
+    record {
+        4 bytes      type
+        4 bytes      length of entire record (that is, including 8 bytes for type and length)
+        length-8     actual record data
+    }
+
+    0-3 bytes padding - not relevant here, we're not going that far
+    */
+
+
+    delete tmpchar;
+    tmpchar = new char [12];
+
+    qDebug("reading 12 bytes\n");
+    if (mobiStream.readRawData(tmpchar,12) != 12) {
+        qDebug("failed to read 12 bytes from file\n");
+        return false;
+    }
+//        printbytes(tmpchar,12);
+    if (strncmp(tmpchar,"EXTH",4) != 0) {
+        qDebug("EXTH header not found\n");
+        return false;
+    }
+
+    qDebug("got EXTH header\n");
+    unsigned int headerlength = bytesToInt(tmpchar,4,4);
+    unsigned int exthRecords = bytesToInt(tmpchar,8,4);
+
+        printf("header is %x long \n", headerlength);
+        printf("there are %x records \n",exthRecords);
+
+        //go through the EXTH records
+        for (unsigned int j=0; j<exthRecords; j++)
+        {
+            char * tmprecord = new char [8];
+            if (mobiStream.readRawData(tmprecord,8) !=8 ) {
+                qDebug("failed to seek 8 bytes\n");
+                return false;
+            }
+
+//                printf("record %d/%d\n",j,exthRecords);
+                unsigned int recType = bytesToInt(tmprecord,0,4);
+//                printf(" type   : %d\n",recType);
+                unsigned int recLength = bytesToInt(tmprecord,4,4);
+//                printf(" length : %0x\n", recLength);
+
+                char * recordData = new char[(int)recLength - 8];
+                if (mobiStream.readRawData(recordData,(int)recLength - 8) != (int)recLength -8) {
+                    qDebug("failed to read record data\n");
+                    return false;
+                }
+
+                QString tmpstring = QString(recordData);
+                tmpstring.resize((int)recLength -8);
+
+                switch (recType) {
+                case 100:
+                    printf("author : %s \n", recordData);
+
+                    /* authors are in array, add one by one
+                    * with no repetitions
+                    */
+                    if (!author_.contains(tmpstring))
+                        author_ << tmpstring;
+                    break;
+                case 101:
+                    publisher_ = tmpstring;
+                    break;
+                case 106:
+                    printf("date : %s \n", recordData);
+                    year_ = tmpstring.section('-', 0, 0);
+                    break;
+				case 105:
+                    printf("genre : %s \n", recordData);
+                    break;
+                case 503:
+                    printf("title : %s \n", recordData);
+                    title_ = tmpstring;
+                    break;
+
+                default:
+                    break;
+                }
+            delete tmprecord;
+        } // for unsigned int
+
+
+
+
+
+
+    return true;
+
 }
 
 void MetadataReader::collect()
@@ -65,6 +352,7 @@ void MetadataReader::collect()
         QFile opfFile(fileInfo_.absoluteFilePath().replace(extensions.at(i), "opf"));
         if (opfFile.open(QIODevice::ReadOnly))
         {
+			qDebug() << "trying opf : " << opfFile.fileName() << "\n";
             xmlStream = QString(opfFile.readAll());
             opfFile.close();
             break;
@@ -72,6 +360,7 @@ void MetadataReader::collect()
     }
 
     if (xmlStream.isEmpty())
+    qDebug("empty xml stream\n");
     {
         if (fileInfo_.suffix() == "epub")
         {
@@ -83,7 +372,6 @@ void MetadataReader::collect()
                     QString fileName = archive.getCurrentFileName();
                     if (fileName.endsWith(".opf"))
                     {
-//                        qDebug() << fileName;
                         QuaZipFile zippedOpfFile(fileInfo_.absoluteFilePath(), fileName);
                         zippedOpfFile.open(QIODevice::ReadOnly);
                         xmlStream = QString(zippedOpfFile.readAll());
@@ -105,6 +393,14 @@ void MetadataReader::collect()
 
             delete document;
         }
+        else if (fileInfo_.suffix() == "mobi")
+        {
+			qDebug("trying to read mobi metadata\n");
+			if (!readMobiMetadata()) {
+				qDebug("mobi scan failed\n");
+			}
+		}
+
     }
 
     if (!xmlStream.isEmpty())
@@ -337,13 +633,13 @@ void MetadataReader::calibreCollect(QXmlStreamAttributes attributes)
         else if (attributes[i].name() == "name")
         {
 			ClbPropertyType clbPropertyId = ClbPropertyType(clbProperties.indexOf(attributes[i].value().toString()));
-			
+
 			//parameters in calibre are often reversed (value, name)
 			//which made this checks come up empty
-			
-			//there is an assumption that they go in pairs of 0 and 1. 
+
+			//there is an assumption that they go in pairs of 0 and 1.
 			//might crash if something is changed in calibre metadata someday
-			
+
             switch (clbPropertyId)
             {
 				case CLB_SERIES:
@@ -353,7 +649,7 @@ void MetadataReader::calibreCollect(QXmlStreamAttributes attributes)
 					break;
 				case CLB_SERIES_INDEX:
 					qDebug() << "attrname " << 1-i << " " << attributes[1-i].name() << " " << attributes[1-i].value().toString();
-					calibre_series_index_ = 
+					calibre_series_index_ =
 						attributes[1-i].value().toString().remove(QChar('.'), Qt::CaseInsensitive).toInt();
 						//qDebug() << " got index as " << calibre_series_index_;
 					break;

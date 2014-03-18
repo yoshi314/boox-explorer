@@ -34,6 +34,7 @@ public:
 
 public:
     void collect();
+    bool readMobiMetadata();
     QString fileName();
     QString title();
     QStringList author();
