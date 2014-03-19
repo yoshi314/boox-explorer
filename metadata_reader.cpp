@@ -1,4 +1,4 @@
-explorer_view.cpp:/* vim: set sw=4 sts=4 et foldmethod=syntax : */
+/* vim: set sw=4 sts=4 et foldmethod=syntax : */
 
 /*  Copyright (C) 2011-2012 OpenBOOX
  *
