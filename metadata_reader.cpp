@@ -401,7 +401,7 @@ http://wiki.mobileread.com/wiki/PDB#Palm_Database_Format
                 if (!readMobiMetadata()) {
                     qDebug("mobi scan failed\n");
                 }
-                QString _epub = fileInfo_.completeBaseName() + ".epub";
+                QString _epub = fileInfo_.absolutePath() + "/" + fileInfo_.completeBaseName() + ".epub";
                 QFile _epubfile(_epub);
                 if (_epubfile.exists()) {
                     qDebug() << "found epub file of the same name, trying to copy some metadata off it\n";
@@ -431,6 +431,8 @@ http://wiki.mobileread.com/wiki/PDB#Palm_Database_Format
 
                     }
 
+                } else {
+                    qDebug() << "epub for mobi not found ; " << _epubfile.fileName() << "\n";
                 }
             }
 
