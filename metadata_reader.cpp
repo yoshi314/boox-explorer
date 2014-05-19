@@ -401,6 +401,37 @@ http://wiki.mobileread.com/wiki/PDB#Palm_Database_Format
                 if (!readMobiMetadata()) {
                     qDebug("mobi scan failed\n");
                 }
+                QString _epub = fileInfo_.completeBaseName() + ".epub";
+                QFile _epubfile(_epub);
+                if (_epubfile.exists()) {
+                    qDebug() << "found epub file of the same name, trying to copy some metadata off it\n";
+                    qDebug() << "file : " << _epubfile.fileName() << "\n";
+                    if (_epubfile.open(QIODevice::ReadOnly)) {
+                        qDebug() << "file opened\n";
+
+                        //copy for now the previous data import stanza
+                        QuaZip archive(_epubfile.fileName());
+                        if (archive.open(QuaZip::mdUnzip))
+                        {
+                            while (archive.goToNextFile())
+                            {
+                                QString fileName = archive.getCurrentFileName();
+                                if (fileName.endsWith(".opf"))
+                                {
+                                    QuaZipFile zippedOpfFile(_epubfile.fileName(), fileName);
+                                    zippedOpfFile.open(QIODevice::ReadOnly);
+                                    xmlStream = QString(zippedOpfFile.readAll());
+                                    zippedOpfFile.close();
+                                    break;
+                                }
+                            }
+                            archive.close();
+                        }
+
+
+                    }
+
+                }
             }
 
         }
@@ -500,13 +531,15 @@ http://wiki.mobileread.com/wiki/PDB#Palm_Database_Format
                                     switch(dcPropertyId)
                                     {
                                         case DC_CREATOR:
-                                            author_ << value;
+                                            //prevent dupes from previous data import
+                                            if (!author_.contains(value))
+                                                author_ << value;
                                             //                            qDebug() << "creator:" << value;
                                             break;
                                         case DC_DATE:
                                             {
                                                 QString yearString = value.section('-', 0, 0);
-                                                if (yearString.size() == 4)
+                                                if ((yearString.size() == 4) && (year_.isEmpty()))
                                                 {
                                                     year_ = yearString;
                                                 }
@@ -514,11 +547,13 @@ http://wiki.mobileread.com/wiki/PDB#Palm_Database_Format
                                                 break;
                                             }
                                         case DC_PUBLISHER:
-                                            publisher_ = value;
+                                            if (!publisher_.isEmpty())
+                                                publisher_ = value;
                                             //                            qDebug() << "publisher:" << value;
                                             break;
                                         case DC_TITLE:
-                                            title_ = value;
+                                            if (!title_.isEmpty())
+                                                title_ = value;
                                             //                            qDebug() << "title:" << value;
                                         default:
                                             break;
