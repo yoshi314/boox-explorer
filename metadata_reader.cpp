@@ -607,7 +607,7 @@ http://wiki.mobileread.com/wiki/PDB#Palm_Database_Format
 
     QString MetadataReader::title()
     {
-        if (!title_.isEmpty())
+        if (title_.isEmpty())
         {
             return title_;
         }
@@ -627,7 +627,7 @@ http://wiki.mobileread.com/wiki/PDB#Palm_Database_Format
 
     QString MetadataReader::publisher()
     {
-        if (!publisher_.isEmpty())
+        if (publisher_.isEmpty())
         {
             return publisher_;
         }
