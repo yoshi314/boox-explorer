@@ -946,18 +946,30 @@ namespace obx
 
             //refresh query
             //now the book should be in db
-            query.prepare("SELECT cover, read_count, id FROM books WHERE file = :file");
+            query.prepare("SELECT cover, read_count, id,series, series_index FROM books WHERE file = :file"); //0,1,2,3,4
             query.bindValue(":file", fullFileName);
             query.exec();
 
             //not sure what is that variable used for
             //book_cover_ = query.value(0).toString();
 
+
             if (query.next()) {
-                query.exec(QString("UPDATE books SET read_date = '%1', read_count = %2 WHERE id = %3")
-                        .arg(QDateTime::currentDateTime().toString(Qt::ISODate))
-                        .arg(query.value(1).toInt() + 1)
-                        .arg(query.value(2).toInt()));
+
+		if ((query.value(4).toInt() > 0) && (!query.value(3).toString().isEmpty())) {  //serie
+			//if book has series and index, update all copies in the same series index
+			query.exec(QString("UPDATE books set read_date = '%1',read_count = %2 where series ='%3' and series_index = %4")
+        	                .arg(QDateTime::currentDateTime().toString(Qt::ISODate))
+                	        .arg(query.value(1).toInt() + 1) 	//read count
+				.arg(query.value(3).toString())		//series
+				.arg(query.value(4).toInt()));		//series index
+				} else {
+			//otherwise just update that book
+	                query.exec(QString("UPDATE books SET read_date = '%1', read_count = %2 WHERE id = %3")
+        	                .arg(QDateTime::currentDateTime().toString(Qt::ISODate))
+                	        .arg(query.value(1).toInt() + 1) 	//read count
+                        	.arg(query.value(2).toInt()));		//id
+		}
             }
 
             //run viewer anyway
