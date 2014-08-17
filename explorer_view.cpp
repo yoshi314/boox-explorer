@@ -356,6 +356,34 @@ namespace obx
                 int seriesCol = rec.indexOf("series");
                 int seriesIdxCol = rec.indexOf("series_index");
                 int readCountCol = rec.indexOf("read_count");
+                int seriesReadDateCol = rec.indexOf("series_read_date");    //date
+                int seriesReadCountCol = rec.indexOf("series_read_count");  //int
+                int seriesUnreadCol = rec.indexOf("series_unread");         //int
+                int seriesBooksCol = rec.indexOf("total_books");             //int
+
+                //last read date of book in the series
+                if (seriesReadDateCol > 0 && (!query.value(seriesReadDateCol).toString().trimmed().isEmpty())) { //if we have series read date
+                    tooltip += QString(" | " + query.value(seriesReadDateCol).toString());
+                }
+
+                if (seriesBooksCol > 0 && seriesUnreadCol > 0 && seriesReadCountCol > 0) { //all should be simultaneously available, but let's check anyway
+
+                    //total amount of reads in the series
+                    if (!query.value(seriesReadCountCol).toString().trimmed().isEmpty())
+                        tooltip += QString(" | series reads : "
+                                           + query.value(seriesReadCountCol).toString());
+
+                    //books unread + read in the series
+                    if ((!query.value(seriesUnreadCol).toString().trimmed().isEmpty()) && (!query.value(seriesBooksCol).toString().trimmed().isEmpty())) {
+                        tooltip += QString(" | "
+                                           + query.value(seriesUnreadCol).toString()
+                                           + " / "
+                                           + query.value(seriesBooksCol).toString()
+                                           + QString(" books read"));
+                    }
+                }
+
+
 
                 //if we have series column
                 if (seriesCol > 0 ) {
