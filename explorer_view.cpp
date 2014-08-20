@@ -328,19 +328,59 @@ namespace obx
 
         while (query.next())
         {
-            if (!leafReached)
+            if (!leafReached)   //directories, like book series
             {
+//              qDebug() << "leaf not reached\n";
                 QStandardItem *item = new QStandardItem();
                 item->setText(query.value(0).toString());
                 item->setIcon(view_icon_);
                 item->setEditable(false);
                 item->setFont(itemFont);
                 item->setTextAlignment(Qt::AlignLeft);
+
+                QSqlRecord rec = query.record();
+
+                int seriesReadDateCol = rec.indexOf("series_read_date");    //date
+                int seriesReadCountCol = rec.indexOf("series_read_count");  //int
+                int seriesUnreadCol = rec.indexOf("series_unread");         //int
+                int seriesTotalBooksCol = rec.indexOf("total_books");             //int
+
+                QString tooltip("");
+
+                //last read date of book in the series
+                if (seriesReadDateCol > 0 && (!query.value(seriesReadDateCol).toString().trimmed().isEmpty())) { //if we have series read date
+                    tooltip += QString(" | " + query.value(seriesReadDateCol).toString());
+                }
+
+                if (seriesTotalBooksCol > 0 && seriesUnreadCol > 0 && seriesReadCountCol > 0) { //all should be simultaneously available, but let's check anyway
+//                  qDebug() << "got series data\n";
+                    //total amount of reads in the series
+                    if (!query.value(seriesReadCountCol).toString().trimmed().isEmpty())
+                        tooltip += QString(" | reads : "
+                                           + query.value(seriesReadCountCol).toString());
+
+                    //display numbers of books read / total books for given series
+                    if ((!query.value(seriesUnreadCol).toString().trimmed().isEmpty()) && (!query.value(seriesTotalBooksCol).toString().trimmed().isEmpty())) {
+                        int total_books = query.value(seriesTotalBooksCol).toInt();
+                        int unread_books = query.value(seriesUnreadCol).toInt();
+
+                        QString read_books ;
+                        read_books.setNum(total_books-unread_books);
+
+                        tooltip += QString(" | "
+                                           + read_books  //figure out read books so far
+                                           + " / "
+                                           + query.value(seriesTotalBooksCol).toString()
+                                           + QString(" books read"));
+                    }
+                }
+                item->setToolTip(tooltip);
                 model_.setItem(i, 0, item);
                 i++;
             }
-            else
+            else //actual books are leaf nodes
             {
+                qDebug() << "leaf reached\n";
                 QString fullFileName = query.value(0).toString();
                 QFileInfo fileInfo(pathPrefix + fullFileName);
                 QStandardItem *item = new QStandardItem();
@@ -355,38 +395,13 @@ namespace obx
                 int authorCol = rec.indexOf("author");
                 int seriesCol = rec.indexOf("series");
                 int seriesIdxCol = rec.indexOf("series_index");
+
                 int readCountCol = rec.indexOf("read_count");
-                int seriesReadDateCol = rec.indexOf("series_read_date");    //date
-                int seriesReadCountCol = rec.indexOf("series_read_count");  //int
-                int seriesUnreadCol = rec.indexOf("series_unread");         //int
-                int seriesBooksCol = rec.indexOf("total_books");             //int
-
-                //last read date of book in the series
-                if (seriesReadDateCol > 0 && (!query.value(seriesReadDateCol).toString().trimmed().isEmpty())) { //if we have series read date
-                    tooltip += QString(" | " + query.value(seriesReadDateCol).toString());
-                }
-
-                if (seriesBooksCol > 0 && seriesUnreadCol > 0 && seriesReadCountCol > 0) { //all should be simultaneously available, but let's check anyway
-
-                    //total amount of reads in the series
-                    if (!query.value(seriesReadCountCol).toString().trimmed().isEmpty())
-                        tooltip += QString(" | series reads : "
-                                           + query.value(seriesReadCountCol).toString());
-
-                    //books unread + read in the series
-                    if ((!query.value(seriesUnreadCol).toString().trimmed().isEmpty()) && (!query.value(seriesBooksCol).toString().trimmed().isEmpty())) {
-                        tooltip += QString(" | "
-                                           + query.value(seriesUnreadCol).toString()
-                                           + " / "
-                                           + query.value(seriesBooksCol).toString()
-                                           + QString(" books read"));
-                    }
-                }
-
 
 
                 //if we have series column
                 if (seriesCol > 0 ) {
+//                  qDebug() << "got general series info\n";
                     //if we also have index column
                     if (seriesIdxCol > 0) {
                         //make sure values are not empty; otherwise no point printing them
@@ -412,6 +427,7 @@ namespace obx
                     }
                 }
                 //if we have author info
+                qDebug() << "got author info\n";
                 if (authorCol > 0 && !(query.value(authorCol).toString().trimmed().isEmpty())) 
                     tooltip += QString(" | By: " + query.value(authorCol).toString());
 
