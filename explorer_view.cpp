@@ -301,7 +301,7 @@ namespace obx
 
     void ExplorerView::showDBViews(int category, const QString &path, int row, const QString &pathPrefix)
     {
-        qDebug(" >>> ExplorerView::showDBViews");
+        //qDebug(" >>> ExplorerView::showDBViews");
         int level = level_ - int(!homeSkipped_);
 
         category_id_ = category;
@@ -380,7 +380,7 @@ namespace obx
             }
             else //actual books are leaf nodes
             {
-                qDebug() << "leaf reached\n";
+                //qDebug() << "leaf reached\n";
                 QString fullFileName = query.value(0).toString();
                 QFileInfo fileInfo(pathPrefix + fullFileName);
                 QStandardItem *item = new QStandardItem();
@@ -415,21 +415,19 @@ namespace obx
 
 
                             tooltip += QString(" | Book " 
-                                    + query.value(seriesIdxCol).toString().insert(position-1, ".")
-                                    + " of " 
-                                    + query.value(seriesCol).toString());
-                        }
+                                    + query.value(seriesIdxCol).toString().insert(position-1, "."));
+//ths is reduntant in series view
+//                                    + " of "
+//                                    + query.value(seriesCol).toString());
 
-                    } else {  //if we only have series column
-                        if (!query.value(seriesCol).toString().trimmed().isEmpty())
-                            tooltip += QString(" | Series: "
-                                    + query.value(seriesCol).toString());
+                        }
                     }
+
                 }
                 //if we have author info
-                qDebug() << "got author info\n";
+                //qDebug() << "got author info\n";
                 if (authorCol > 0 && !(query.value(authorCol).toString().trimmed().isEmpty())) 
-                    tooltip += QString(" | By: " + query.value(authorCol).toString());
+                    tooltip += QString(" | " + query.value(authorCol).toString());
 
                 if (readCountCol > 0) 
                     tooltip += QString(" | " + query.value(readCountCol).toString() + " reads |");
@@ -447,7 +445,7 @@ namespace obx
         model_.setHeaderData(0, Qt::Horizontal, path, Qt::DisplayRole);
 
         displayView(row);
-        qDebug(" <<< ExplorerView::showDBViews");
+//        qDebug(" <<< ExplorerView::showDBViews");
     }
 
     void ExplorerView::showApps(int category, const QString &name, int row)
