@@ -131,8 +131,8 @@ namespace obx
         qDebug("parsing record0\n");
 
         /*
-           records start at  78 and take up 8*records bytes of data
-http://wiki.mobileread.com/wiki/PDB#Palm_Database_Format
+			records start at  78 and take up 8*records bytes of data
+			http://wiki.mobileread.com/wiki/PDB#Palm_Database_Format
          */
 
         mobiFile.seek(78);
