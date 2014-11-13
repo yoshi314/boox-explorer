@@ -301,7 +301,7 @@ namespace obx
 
     void ExplorerView::showDBViews(int category, const QString &path, int row, const QString &pathPrefix)
     {
-        //qDebug(" >>> ExplorerView::showDBViews");
+        qDebug(" >>> ExplorerView::showDBViews");
         int level = level_ - int(!homeSkipped_);
 
         category_id_ = category;
@@ -415,10 +415,10 @@ namespace obx
 
 
                             tooltip += QString(" | Book " 
-                                    + query.value(seriesIdxCol).toString().insert(position-1, "."));
+                                    + query.value(seriesIdxCol).toString().insert(position-1, ".")
 //ths is reduntant in series view
-//                                    + " of "
-//                                    + query.value(seriesCol).toString());
+                                    + "  "
+                                    + query.value(seriesCol).toString());
 
                         }
                     }
@@ -445,7 +445,7 @@ namespace obx
         model_.setHeaderData(0, Qt::Horizontal, path, Qt::DisplayRole);
 
         displayView(row);
-//        qDebug(" <<< ExplorerView::showDBViews");
+        qDebug(" <<< ExplorerView::showDBViews");
     }
 
     void ExplorerView::showApps(int category, const QString &name, int row)
