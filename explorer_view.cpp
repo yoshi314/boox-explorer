@@ -1000,6 +1000,14 @@ namespace obx
 
 		if ((query.value(4).toInt() > 0) && (!query.value(3).toString().isEmpty())) {  //serie
 			//if book has series and index, update all copies in the same series index
+
+			qDebug() << "UPDATE books set read_date = '%1',read_count = %2 where series ='%3' and series_index = %4" << 
+				QDateTime::currentDateTime().toString(Qt::ISODate) << " " <<
+				query.value(1).toInt() + 1 << " " <<
+				query.value(3).toString() << " " << 
+				query.value(4).toInt() << "\n";
+				;
+
 			query.exec(QString("UPDATE books set read_date = '%1',read_count = %2 where series ='%3' and series_index = %4")
         	                .arg(QDateTime::currentDateTime().toString(Qt::ISODate))
                 	        .arg(query.value(1).toInt() + 1) 	//read count
@@ -1007,11 +1015,25 @@ namespace obx
 				.arg(query.value(4).toInt()));		//series index
 				} else {
 			//otherwise just update that book
+			//
+			qDebug() << "UPDATE books SET read_date, read_count where id = " << 
+				query.value(2).toInt() << " " <<  
+				QDateTime::currentDateTime().toString(Qt::ISODate) << " " << 
+				query.value(1).toInt() + 1 << "\n" ;
+			//debug
+
 	                query.exec(QString("UPDATE books SET read_date = '%1', read_count = %2 WHERE id = %3")
         	                .arg(QDateTime::currentDateTime().toString(Qt::ISODate))
                 	        .arg(query.value(1).toInt() + 1) 	//read count
                         	.arg(query.value(2).toInt()));		//id
 		}
+		//sometimes the update fails, maybe due to odd characters in filename
+		//bump the entry for the book once again, not increasing the read count
+	                query.exec(QString("UPDATE books SET read_date = '%1', read_count = %2 WHERE id = %3")
+        	                .arg(QDateTime::currentDateTime().toString(Qt::ISODate))
+                	        .arg(query.value(1).toInt()) 	//read count
+                        	.arg(query.value(2).toInt()));		//id
+
             }
 
             //run viewer anyway
