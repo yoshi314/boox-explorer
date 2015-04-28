@@ -999,18 +999,24 @@ namespace obx
             if (query.next()) {
 
 		if ((query.value(4).toInt() > 0) && (!query.value(3).toString().isEmpty())) {  //serie
-			//if book has series and index, update all copies in the same series index
-			query.exec(QString("UPDATE books set read_date = '%1',read_count = %2 where series ='%3' and series_index = %4")
-        	                .arg(QDateTime::currentDateTime().toString(Qt::ISODate))
-                	        .arg(query.value(1).toInt() + 1) 	//read count
-				.arg(query.value(3).toString())		//series
-				.arg(query.value(4).toInt()));		//series index
-				} else {
+		//if book has series and index, update all copies in the same series index
+                //binding should fix filenames with odd characters, like  ' 
+                //because for them straightforward sql fails
+                query.prepare(QString("UPDATE books SET read_date = ':date', read_count = :count WHERE series=':series' and series_index = :series_index");
+                query.bindValue(":date", QDateTime::currentDateTime().toString(Qt::ISODate);
+                query.bindValue(":count",query.value(1).toInt() + 1);
+		query.bindValue(":series",query.value(3).toString());
+		query.bindValue(":series_index",query.value(4).toInt());
+		query.exec();
+		
+		} else {
 			//otherwise just update that book
-	                query.exec(QString("UPDATE books SET read_date = '%1', read_count = %2 WHERE id = %3")
-        	                .arg(QDateTime::currentDateTime().toString(Qt::ISODate))
-                	        .arg(query.value(1).toInt() + 1) 	//read count
-                        	.arg(query.value(2).toInt()));		//id
+	        query.prepare(QString("UPDATE books SET read_date = ':date', read_count = :count WHERE id = :id");
+		query.bindValue(":date",QDateTime::currentDateTime().toString(Qt::ISODate));
+		query.bindValue(":count",query.value(1).toInt() + 1); 	//read count
+		query.bindValue(":id",query.value(2).toInt());		//id
+
+		query.exec();
 		}
             }
 
